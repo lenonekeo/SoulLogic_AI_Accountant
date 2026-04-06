@@ -1,4 +1,5 @@
 import { google, drive_v3 } from "googleapis";
+import { Readable } from "stream";
 import { getGoogleAuth } from "./auth";
 
 function getDriveClient(): drive_v3.Drive {
@@ -54,7 +55,6 @@ export async function uploadPdf(
 ): Promise<{ fileId: string; url: string }> {
   const drive = getDriveClient();
 
-  const { Readable } = await import("stream");
   const stream = Readable.from(pdfBuffer);
 
   const created = await drive.files.create({
