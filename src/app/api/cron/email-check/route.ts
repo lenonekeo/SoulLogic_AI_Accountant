@@ -45,24 +45,27 @@ export async function GET(req: NextRequest) {
             const parsed = await parseInvoiceDocument(pdfBuffer);
             console.log("[email-check] Parsed:", JSON.stringify(parsed));
 
-            // 3. Upload to Google Drive (best effort)
+            // 4. Generate purchase invoice ID first (needed for filename)
+            const purchInvId = await nextId(SHEETS.PurchaseInvoices, "PurchInv_ID", ID_PREFIXES.PurchaseInvoice);
+
+            // 3. Upload to Google Drive with renamed file (best effort)
+            const invoiceNo = parsed.invoiceNumber ? `_${parsed.invoiceNumber}` : "";
+            const renamedFile = `${purchInvId}${invoiceNo}_${parsed.vendorName ?? "Vendor"}.pdf`
+              .replace(/[^a-zA-Z0-9._\-() ]/g, "_"); // sanitize filename
             let pdfUrl = "";
             try {
               const year = today().slice(0, 4);
               pdfUrl = await uploadDocument(
                 pdfBuffer,
-                attachment.filename,
-                "EMAIL",
+                renamedFile,
                 "Purchase_Invoices",
+                "EMAIL",
                 year
               );
               console.log("[email-check] Uploaded to Drive:", pdfUrl);
             } catch (driveErr) {
               console.warn("[email-check] Drive upload failed, continuing without PDF URL:", driveErr instanceof Error ? driveErr.message : driveErr);
             }
-
-            // 4. Save directly to sheet
-            const purchInvId = await nextId(SHEETS.PurchaseInvoices, "PurchInv_ID", ID_PREFIXES.PurchaseInvoice);
 
             // AI categorize each line item to get the proper GL account
             const categorizations = await Promise.all(
@@ -106,7 +109,7 @@ export async function GET(req: NextRequest) {
               PurchaseStatus.Pending,
               "FALSE",
               pdfUrl,
-              attachment.filename,
+              renamedFile,
               from,
               today(),
               "", "", "",
