@@ -1,6 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
-
 export interface ParsedDocumentData {
   rawText: string;
   date?: string;
@@ -20,6 +17,9 @@ export interface ParsedDocumentData {
 
 // ── Extract text from PDF buffer ──
 export async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
+  // Dynamic import prevents pdf-parse from loading test files at build time
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
   const data = await pdfParse(pdfBuffer);
   return data.text;
 }
