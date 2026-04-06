@@ -42,7 +42,15 @@ export function getGmailAuth(): OAuth2Client {
   }
 
   _gmailAuth = new google.auth.OAuth2(clientId, clientSecret);
-  _gmailAuth.setCredentials({ refresh_token: refreshToken });
+  _gmailAuth.setCredentials({
+    refresh_token: refreshToken,
+    scope: [
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/drive.file",
+    ].join(" "),
+  });
 
   return _gmailAuth;
 }

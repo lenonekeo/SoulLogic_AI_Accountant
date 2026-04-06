@@ -1,9 +1,11 @@
 import { google, drive_v3 } from "googleapis";
 import { Readable } from "stream";
-import { getGoogleAuth } from "./auth";
+import { getGoogleAuth, getGmailAuth } from "./auth";
 
 function getDriveClient(): drive_v3.Drive {
-  return google.drive({ version: "v3", auth: getGoogleAuth() });
+  // Use OAuth user credentials so uploads count against user quota (not service account)
+  const auth = process.env.GMAIL_REFRESH_TOKEN ? getGmailAuth() : getGoogleAuth();
+  return google.drive({ version: "v3", auth });
 }
 
 const ROOT_FOLDER_ID = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID ?? "";
