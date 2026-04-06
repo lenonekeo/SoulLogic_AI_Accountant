@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { ok, error } from "@/lib/utils/api-helpers";
 import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment, markAsRead, getEmailHeader } from "@/lib/google/gmail";
 import { parseInvoiceDocument } from "@/lib/ai/document-parser";
+import { categorizeExpense } from "@/lib/ai/categorizer";
 import { appendRow } from "@/lib/google/sheets";
 import { SHEETS } from "@/types/sheets";
 import { ID_PREFIXES, PurchaseStatus } from "@/types/enums";
@@ -63,12 +64,19 @@ export async function GET(req: NextRequest) {
             // 4. Save directly to sheet
             const purchInvId = await nextId(SHEETS.PurchaseInvoices, "PurchInv_ID", ID_PREFIXES.PurchaseInvoice);
 
-            const lineItems = parsed.lineItems.map((li) => ({
-              Description: li.description,
-              Account_Code: "5000",
-              Amount: li.amount,
-              Tax_Amount: 0,
-            }));
+            // AI categorize each line item to get the proper GL account
+            const lineItems = await Promise.all(
+              parsed.lineItems.map(async (li) => {
+                const cat = await categorizeExpense(li.description, parsed.vendorName ?? undefined, li.amount);
+                console.log(`[email-check] Line "${li.description}" → ${cat.suggestedAccount} (${cat.accountName}) confidence:${cat.confidence}`);
+                return {
+                  Description: li.description,
+                  Account_Code: cat.suggestedAccount,
+                  Amount: li.amount,
+                  Tax_Amount: 0,
+                };
+              })
+            );
 
             const subtotal = parsed.subtotal ?? parsed.lineItems.reduce((s, li) => s + li.amount, 0);
             const taxAmount = parsed.taxAmount ?? 0;
