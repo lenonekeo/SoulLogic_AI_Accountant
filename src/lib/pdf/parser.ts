@@ -1,10 +1,3 @@
-// Polyfill browser APIs required by pdfjs-dist in Node.js environment
-if (typeof globalThis.DOMMatrix === "undefined") {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { DOMMatrix } = require("dommatrix") as { DOMMatrix: typeof globalThis.DOMMatrix };
-  globalThis.DOMMatrix = DOMMatrix;
-}
-
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
 
