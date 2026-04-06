@@ -32,59 +32,69 @@ export async function GET(req: NextRequest) {
         const from = getEmailHeader(email, "From");
 
         for (const attachment of attachments) {
-          // 1. Download PDF
-          const pdfBuffer = await getAttachment(msg.id, attachment.attachmentId);
+          try {
+            console.log("[email-check] Processing attachment:", attachment.filename);
 
-          // 2. AI parse invoice
-          const parsed = await parseInvoiceDocument(pdfBuffer);
+            // 1. Download PDF
+            const pdfBuffer = await getAttachment(msg.id, attachment.attachmentId);
+            console.log("[email-check] PDF downloaded, size:", pdfBuffer.length);
 
-          // 3. Upload to Google Drive
-          const year = today().slice(0, 4);
-          const pdfUrl = await uploadDocument(
-            pdfBuffer,
-            attachment.filename,
-            "EMAIL",
-            "Purchase_Invoices",
-            year
-          );
+            // 2. AI parse invoice
+            const parsed = await parseInvoiceDocument(pdfBuffer);
+            console.log("[email-check] Parsed:", JSON.stringify(parsed));
 
-          // 4. Save directly to sheet
-          const purchInvId = await nextId(SHEETS.PurchaseInvoices, "PurchInv_ID", ID_PREFIXES.PurchaseInvoice);
+            // 3. Upload to Google Drive
+            const year = today().slice(0, 4);
+            const pdfUrl = await uploadDocument(
+              pdfBuffer,
+              attachment.filename,
+              "EMAIL",
+              "Purchase_Invoices",
+              year
+            );
+            console.log("[email-check] Uploaded to Drive:", pdfUrl);
 
-          const lineItems = parsed.lineItems.map((li) => ({
-            Description: li.description,
-            Account_Code: "5000",
-            Amount: li.amount,
-            Tax_Amount: 0,
-          }));
+            // 4. Save directly to sheet
+            const purchInvId = await nextId(SHEETS.PurchaseInvoices, "PurchInv_ID", ID_PREFIXES.PurchaseInvoice);
 
-          const subtotal = parsed.subtotal ?? parsed.lineItems.reduce((s, li) => s + li.amount, 0);
-          const taxAmount = parsed.taxAmount ?? 0;
-          const total = parsed.totalAmount ?? subtotal + taxAmount;
+            const lineItems = parsed.lineItems.map((li) => ({
+              Description: li.description,
+              Account_Code: "5000",
+              Amount: li.amount,
+              Tax_Amount: 0,
+            }));
 
-          const row = [
-            purchInvId,
-            "",                           // Vendor_ID — to be matched manually
-            parsed.invoiceNumber ?? "",
-            parsed.date ?? today(),
-            today(),                      // Due_Date — estimated
-            JSON.stringify(lineItems),
-            subtotal.toFixed(2),
-            taxAmount.toFixed(2),
-            total.toFixed(2),
-            0,
-            total.toFixed(2),
-            PurchaseStatus.Pending,
-            "FALSE",
-            pdfUrl,
-            attachment.filename,
-            from,
-            today(),
-            "", "", "",
-            ...dimensionArray({}),
-          ];
+            const subtotal = parsed.subtotal ?? parsed.lineItems.reduce((s, li) => s + li.amount, 0);
+            const taxAmount = parsed.taxAmount ?? 0;
+            const total = parsed.totalAmount ?? subtotal + taxAmount;
 
-          await appendRow(SHEETS.PurchaseInvoices, row);
+            const row = [
+              purchInvId,
+              "",                           // Vendor_ID — to be matched manually
+              parsed.invoiceNumber ?? "",
+              parsed.date ?? today(),
+              today(),                      // Due_Date — estimated
+              JSON.stringify(lineItems),
+              subtotal.toFixed(2),
+              taxAmount.toFixed(2),
+              total.toFixed(2),
+              0,
+              total.toFixed(2),
+              PurchaseStatus.Pending,
+              "FALSE",
+              pdfUrl,
+              attachment.filename,
+              from,
+              today(),
+              "", "", "",
+              ...dimensionArray({}),
+            ];
+
+            await appendRow(SHEETS.PurchaseInvoices, row);
+            console.log("[email-check] Row saved:", purchInvId);
+          } catch (attErr) {
+            console.error("[email-check] Attachment error:", attachment.filename, attErr);
+          }
         }
 
         await markAsRead(msg.id);
