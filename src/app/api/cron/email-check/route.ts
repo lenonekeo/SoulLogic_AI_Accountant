@@ -65,18 +65,25 @@ export async function GET(req: NextRequest) {
             const purchInvId = await nextId(SHEETS.PurchaseInvoices, "PurchInv_ID", ID_PREFIXES.PurchaseInvoice);
 
             // AI categorize each line item to get the proper GL account
-            const lineItems = await Promise.all(
+            const categorizations = await Promise.all(
               parsed.lineItems.map(async (li) => {
                 const cat = await categorizeExpense(li.description, parsed.vendorName ?? undefined, li.amount);
                 console.log(`[email-check] Line "${li.description}" → ${cat.suggestedAccount} (${cat.accountName}) confidence:${cat.confidence}`);
-                return {
-                  Description: li.description,
-                  Account_Code: cat.suggestedAccount,
-                  Amount: li.amount,
-                  Tax_Amount: 0,
-                };
+                return { li, cat };
               })
             );
+
+            const lineItems = categorizations.map(({ li, cat }) => ({
+              Description: li.description,
+              Account_Code: cat.suggestedAccount,
+              Account_Name: cat.accountName,
+              Amount: li.amount,
+              Tax_Amount: 0,
+            }));
+
+            // Primary GL account = first line item's account (most representative)
+            const primaryAccount = categorizations[0]?.cat.suggestedAccount ?? "6000";
+            const primaryAccountName = categorizations[0]?.cat.accountName ?? "Other Expenses";
 
             const subtotal = parsed.subtotal ?? parsed.lineItems.reduce((s, li) => s + li.amount, 0);
             const taxAmount = parsed.taxAmount ?? 0;
@@ -89,6 +96,8 @@ export async function GET(req: NextRequest) {
               parsed.date ?? today(),
               today(),                      // Due_Date — estimated
               JSON.stringify(lineItems),
+              primaryAccount,               // GL_Account_Code
+              primaryAccountName,           // GL_Account_Name
               subtotal.toFixed(2),
               taxAmount.toFixed(2),
               total.toFixed(2),
