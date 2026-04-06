@@ -44,16 +44,21 @@ export async function GET(req: NextRequest) {
             const parsed = await parseInvoiceDocument(pdfBuffer);
             console.log("[email-check] Parsed:", JSON.stringify(parsed));
 
-            // 3. Upload to Google Drive
-            const year = today().slice(0, 4);
-            const pdfUrl = await uploadDocument(
-              pdfBuffer,
-              attachment.filename,
-              "EMAIL",
-              "Purchase_Invoices",
-              year
-            );
-            console.log("[email-check] Uploaded to Drive:", pdfUrl);
+            // 3. Upload to Google Drive (best effort)
+            let pdfUrl = "";
+            try {
+              const year = today().slice(0, 4);
+              pdfUrl = await uploadDocument(
+                pdfBuffer,
+                attachment.filename,
+                "EMAIL",
+                "Purchase_Invoices",
+                year
+              );
+              console.log("[email-check] Uploaded to Drive:", pdfUrl);
+            } catch (driveErr) {
+              console.warn("[email-check] Drive upload failed, continuing without PDF URL:", driveErr instanceof Error ? driveErr.message : driveErr);
+            }
 
             // 4. Save directly to sheet
             const purchInvId = await nextId(SHEETS.PurchaseInvoices, "PurchInv_ID", ID_PREFIXES.PurchaseInvoice);
