@@ -8,7 +8,6 @@ import { SHEETS } from "@/types/sheets";
 import { ID_PREFIXES, PurchaseStatus } from "@/types/enums";
 import { nextId } from "@/lib/accounting/id-generator";
 import { dimensionArray } from "@/lib/accounting/dimensions";
-import { uploadDocument } from "@/lib/google/drive";
 import { today } from "@/lib/utils/date";
 
 export const runtime = "nodejs";
@@ -55,13 +54,13 @@ export async function GET(req: NextRequest) {
             let pdfUrl = "";
             try {
               const year = today().slice(0, 4);
-              pdfUrl = await uploadDocument(
-                pdfBuffer,
-                renamedFile,
-                "Purchase_Invoices",
-                "EMAIL",
-                year
-              );
+              // Upload to SoulLogic_Accounting/Purchase_Invoices/YEAR/
+              const { getOrCreateFolder, uploadPdf } = await import("@/lib/google/drive");
+              const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID!;
+              const purchFolderId = await getOrCreateFolder("Purchase_Invoices", rootFolderId);
+              const yearFolderId = await getOrCreateFolder(year, purchFolderId);
+              const { url } = await uploadPdf(pdfBuffer, renamedFile, yearFolderId);
+              pdfUrl = url;
               console.log("[email-check] Uploaded to Drive:", pdfUrl);
             } catch (driveErr) {
               console.warn("[email-check] Drive upload failed, continuing without PDF URL:", driveErr instanceof Error ? driveErr.message : driveErr);
