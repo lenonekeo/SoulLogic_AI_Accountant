@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
         const email = await getEmail(msg.id);
         const attachments = getPdfAttachments(email);
         const from = getEmailHeader(email, "From");
+        console.log("[email-check] Found attachments:", attachments.length, attachments.map(a => a.filename));
 
         for (const attachment of attachments) {
           try {

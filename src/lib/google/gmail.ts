@@ -122,7 +122,12 @@ export function getPdfAttachments(
 
   function scanParts(parts: gmail_v1.Schema$MessagePart[]): void {
     for (const part of parts) {
-      if (part.mimeType === "application/pdf" && part.filename && part.body?.attachmentId) {
+      const isPdf =
+        part.mimeType === "application/pdf" ||
+        part.mimeType === "application/octet-stream" ||
+        (part.filename?.toLowerCase().endsWith(".pdf") ?? false);
+
+      if (isPdf && part.filename && part.body?.attachmentId) {
         pdfs.push({ filename: part.filename, attachmentId: part.body.attachmentId });
       }
       if (part.parts) scanParts(part.parts);
