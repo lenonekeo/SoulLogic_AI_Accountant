@@ -99,13 +99,7 @@ export async function GET(req: NextRequest) {
               })
             );
 
-            const lineItems = categorizations.map(({ li, cat }) => ({
-              Description: li.description,
-              Account_Code: cat.suggestedAccount,
-              Account_Name: cat.accountName,
-              Amount: li.amount,
-              Tax_Amount: 0,
-            }));
+            const lineItems = categorizations.map(({ li }) => li.description).join(" | ");
 
             // Primary GL account = first line item's account (most representative)
             const primaryAccount = categorizations[0]?.cat.suggestedAccount ?? "6000";
@@ -126,7 +120,7 @@ export async function GET(req: NextRequest) {
               parsed.invoiceNumber ?? "",
               parsed.date ?? today(),
               today(),                      // Due_Date — estimated
-              JSON.stringify(lineItems),
+              lineItems,
               primaryAccount,               // GL_Account_Code
               primaryAccountName,           // GL_Account_Name
               subtotal.toFixed(2),
