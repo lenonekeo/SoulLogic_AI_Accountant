@@ -113,27 +113,50 @@ export function getEmailHeader(message: gmail_v1.Schema$Message, name: string): 
   return headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
 }
 
-// ── Extract PDF attachments from email ──
+// ── Extract invoice attachments from email (PDF + images) ──
 export function getPdfAttachments(
   message: gmail_v1.Schema$Message
-): Array<{ filename: string; attachmentId: string }> {
+): Array<{ filename: string; attachmentId: string; mimeType: string }> {
   const parts = message.payload?.parts ?? [];
-  const pdfs: Array<{ filename: string; attachmentId: string }> = [];
+  const results: Array<{ filename: string; attachmentId: string; mimeType: string }> = [];
+
+  const SUPPORTED_TYPES = [
+    "application/pdf",
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+  ];
 
   function scanParts(parts: gmail_v1.Schema$MessagePart[]): void {
     for (const part of parts) {
-      const isPdf =
-        part.mimeType === "application/pdf" ||
-        part.mimeType === "application/octet-stream" ||
-        (part.filename?.toLowerCase().endsWith(".pdf") ?? false);
+      const mime = part.mimeType?.toLowerCase() ?? "";
+      const filename = part.filename?.toLowerCase() ?? "";
 
-      if (isPdf && part.filename && part.body?.attachmentId) {
-        pdfs.push({ filename: part.filename, attachmentId: part.body.attachmentId });
+      const isSupported =
+        SUPPORTED_TYPES.includes(mime) ||
+        mime === "application/octet-stream" ||
+        filename.endsWith(".pdf") ||
+        filename.endsWith(".jpg") ||
+        filename.endsWith(".jpeg") ||
+        filename.endsWith(".png") ||
+        filename.endsWith(".webp") ||
+        filename.endsWith(".heic") ||
+        filename.endsWith(".heif");
+
+      if (isSupported && part.filename && part.body?.attachmentId) {
+        results.push({
+          filename: part.filename,
+          attachmentId: part.body.attachmentId,
+          mimeType: part.mimeType ?? "application/octet-stream",
+        });
       }
       if (part.parts) scanParts(part.parts);
     }
   }
 
   scanParts(parts);
-  return pdfs;
+  return results;
 }

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { ok, error } from "@/lib/utils/api-helpers";
 import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment, markAsRead, getEmailHeader } from "@/lib/google/gmail";
-import { parseInvoiceDocument } from "@/lib/ai/document-parser";
+import { parseInvoiceDocument, parseInvoiceImage } from "@/lib/ai/document-parser";
 import { categorizeExpense } from "@/lib/ai/categorizer";
 import { appendRow } from "@/lib/google/sheets";
 import { SHEETS } from "@/types/sheets";
@@ -21,7 +21,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const messages = await listUnreadEmails("is:unread has:attachment filename:pdf subject:(invoice OR bill OR receipt)");
+    // Broad query: any unread email with a PDF or image attachment
+    const messages = await listUnreadEmails("is:unread has:attachment");
     const processed: string[] = [];
 
     for (const msg of messages.slice(0, 10)) {
@@ -40,8 +41,20 @@ export async function GET(req: NextRequest) {
             const pdfBuffer = await getAttachment(msg.id, attachment.attachmentId);
             console.log("[email-check] PDF downloaded, size:", pdfBuffer.length);
 
-            // 2. AI parse invoice
-            const parsed = await parseInvoiceDocument(pdfBuffer);
+            // 2. AI parse invoice — PDF or image
+            const mime = attachment.mimeType.toLowerCase();
+            const isImage = mime.startsWith("image/");
+            let parsed;
+            if (isImage) {
+              const imageMime = (
+                mime === "image/png" ? "image/png" :
+                mime === "image/webp" ? "image/webp" :
+                "image/jpeg"
+              ) as "image/jpeg" | "image/png" | "image/webp";
+              parsed = await parseInvoiceImage(pdfBuffer, imageMime);
+            } else {
+              parsed = await parseInvoiceDocument(pdfBuffer);
+            }
             console.log("[email-check] Parsed:", JSON.stringify(parsed));
 
             // 4. Generate purchase invoice ID first (needed for filename)
