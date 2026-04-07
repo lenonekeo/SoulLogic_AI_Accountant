@@ -179,8 +179,6 @@ export const SHEET_HEADERS: Record<string, string[]> = {
     "Tax_Amount",
     "Tax1_Amount",
     "Tax2_Amount",
-    "Tax3_Amount",
-    "Tax4_Amount",
     "Total_Amount",
     "Amount_Paid",
     "Balance_Due",
