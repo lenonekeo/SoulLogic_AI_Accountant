@@ -45,6 +45,42 @@ export async function parseInvoiceDocument(pdfBuffer: Buffer): Promise<ParsedInv
   };
 }
 
+// ── Quickly check if a document/image looks like an invoice ──
+export async function isInvoiceDocument(
+  buffer: Buffer,
+  mimeType: string
+): Promise<boolean> {
+  const client = getClaudeClient();
+  const isImage = mimeType.startsWith("image/");
+
+  let content: Anthropic.MessageParam["content"];
+
+  if (isImage) {
+    const base64 = buffer.toString("base64");
+    const imgMime = (
+      mimeType === "image/png" ? "image/png" :
+      mimeType === "image/webp" ? "image/webp" :
+      "image/jpeg"
+    ) as "image/jpeg" | "image/png" | "image/webp";
+    content = [
+      { type: "image", source: { type: "base64", media_type: imgMime, data: base64 } },
+      { type: "text", text: "Is this an invoice, bill, or receipt? Reply only YES or NO." },
+    ];
+  } else {
+    const text = (await import("@/lib/pdf/parser").then(m => m.extractPdfText(buffer))).slice(0, 1000);
+    content = `Is this text from an invoice, bill, or receipt? Reply only YES or NO.\n\n${text}`;
+  }
+
+  const response = await client.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 10,
+    messages: [{ role: "user", content }],
+  });
+
+  const answer = response.content[0].type === "text" ? response.content[0].text.trim().toUpperCase() : "";
+  return answer.startsWith("YES");
+}
+
 // ── Parse an image buffer (JPG/PNG) using Claude Vision ──
 export async function parseInvoiceImage(
   imageBuffer: Buffer,

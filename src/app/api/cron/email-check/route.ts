@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { ok, error } from "@/lib/utils/api-helpers";
 import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment, markAsRead, getEmailHeader } from "@/lib/google/gmail";
-import { parseInvoiceDocument, parseInvoiceImage } from "@/lib/ai/document-parser";
+import { parseInvoiceDocument, parseInvoiceImage, isInvoiceDocument } from "@/lib/ai/document-parser";
 import { categorizeExpense } from "@/lib/ai/categorizer";
 import { appendRow } from "@/lib/google/sheets";
 import { SHEETS } from "@/types/sheets";
@@ -45,7 +45,14 @@ export async function GET(req: NextRequest) {
             const pdfBuffer = await getAttachment(msg.id, attachment.attachmentId);
             console.log("[email-check] PDF downloaded, size:", pdfBuffer.length);
 
-            // 2. AI parse invoice — PDF or image
+            // 2. Quick check — is this actually an invoice?
+            const isInvoice = await isInvoiceDocument(pdfBuffer, attachment.mimeType);
+            if (!isInvoice) {
+              console.log("[email-check] Skipping non-invoice attachment:", attachment.filename);
+              continue;
+            }
+
+            // 3. AI parse invoice — PDF or image
             const mime = attachment.mimeType.toLowerCase();
             const isImage = mime.startsWith("image/");
             let parsed;
@@ -61,10 +68,10 @@ export async function GET(req: NextRequest) {
             }
             console.log("[email-check] Parsed:", JSON.stringify(parsed));
 
-            // 4. Generate purchase invoice ID first (needed for filename)
+            // 5. Generate purchase invoice ID first (needed for filename)
             const purchInvId = await nextId(SHEETS.PurchaseInvoices, "PurchInv_ID", ID_PREFIXES.PurchaseInvoice);
 
-            // 3. Upload to Google Drive with renamed file (best effort)
+            // 4. Upload to Google Drive with renamed file (best effort)
             const invoiceNo = parsed.invoiceNumber ? `_${parsed.invoiceNumber}` : "";
             const renamedFile = `${purchInvId}${invoiceNo}_${parsed.vendorName ?? "Vendor"}.pdf`
               .replace(/[^a-zA-Z0-9._\-() ]/g, "_"); // sanitize filename
