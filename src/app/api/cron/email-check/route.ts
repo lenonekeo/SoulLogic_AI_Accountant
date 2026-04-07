@@ -21,8 +21,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Broad query: any unread email with a PDF or image attachment
-    const messages = await listUnreadEmails("is:unread has:attachment");
+    // Only process emails that have attachments AND match invoice-related keywords
+    // OR come from the user themselves (mobile share)
+    const monitorAddress = process.env.GMAIL_MONITOR_ADDRESS ?? "";
+    const messages = await listUnreadEmails(
+      `is:unread has:attachment (subject:(invoice OR bill OR receipt OR facture) OR from:${monitorAddress})`
+    );
     const processed: string[] = [];
 
     for (const msg of messages.slice(0, 10)) {
