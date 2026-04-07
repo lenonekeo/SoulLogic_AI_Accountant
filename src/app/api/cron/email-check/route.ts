@@ -115,6 +115,13 @@ export async function GET(req: NextRequest) {
             const taxAmount = parsed.taxAmount ?? 0;
             const total = parsed.totalAmount ?? subtotal + taxAmount;
 
+            // Extract individual tax amounts from taxes[] array (up to 4 taxes)
+            const taxLines = parsed.taxes ?? [];
+            const tax1 = taxLines[0]?.amount.toFixed(2) ?? "0.00";
+            const tax2 = taxLines[1]?.amount.toFixed(2) ?? "0.00";
+            const tax3 = taxLines[2]?.amount.toFixed(2) ?? "0.00";
+            const tax4 = taxLines[3]?.amount.toFixed(2) ?? "0.00";
+
             const row = [
               purchInvId,
               "",                           // Vendor_ID — to be matched manually
@@ -126,6 +133,10 @@ export async function GET(req: NextRequest) {
               primaryAccountName,           // GL_Account_Name
               subtotal.toFixed(2),
               taxAmount.toFixed(2),
+              tax1,
+              tax2,
+              tax3,
+              tax4,
               total.toFixed(2),
               0,
               total.toFixed(2),

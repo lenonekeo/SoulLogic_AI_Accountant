@@ -15,6 +15,7 @@ export interface ParsedInvoiceData {
     amount: number;
   }>;
   subtotal: number | null;
+  taxes?: Array<{ type: string; rate: number | null; amount: number }>;
   taxAmount: number | null;
   totalAmount: number | null;
   currency: string;
@@ -38,6 +39,7 @@ export async function parseInvoiceDocument(pdfBuffer: Buffer): Promise<ParsedInv
     clientName: result.clientName ?? null,
     lineItems: result.lineItems ?? [],
     subtotal: result.subtotal ?? null,
+    taxes: result.taxes ?? [],
     taxAmount: result.taxAmount ?? null,
     totalAmount: result.totalAmount ?? null,
     currency: result.currency ?? "CAD",
@@ -118,6 +120,7 @@ export async function parseInvoiceImage(
     clientName: result.clientName ?? null,
     lineItems: result.lineItems ?? [],
     subtotal: result.subtotal ?? null,
+    taxes: result.taxes ?? [],
     taxAmount: result.taxAmount ?? null,
     totalAmount: result.totalAmount ?? null,
     currency: result.currency ?? "CAD",
