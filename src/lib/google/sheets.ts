@@ -6,10 +6,10 @@ function getSheetsClient(): sheets_v4.Sheets {
   return google.sheets({ version: "v4", auth: getGoogleAuth() });
 }
 
-const SPREADSHEET_ID = process.env.GOOGLE_SPREADSHEET_ID!;
+const DEFAULT_SPREADSHEET_ID = process.env.GOOGLE_SPREADSHEET_ID!;
 
 // ── Read all rows from a sheet tab ──
-export async function readSheet(sheetName: string): Promise<string[][]> {
+export async function readSheet(sheetName: string, spreadsheetId?: string): Promise<string[][]> {
   const sheets = getSheetsClient();
   const headers = SHEET_HEADERS[sheetName];
   if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
@@ -18,7 +18,7 @@ export async function readSheet(sheetName: string): Promise<string[][]> {
   const range = `${sheetName}!A2:${lastCol}`;
 
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: spreadsheetId ?? DEFAULT_SPREADSHEET_ID,
     range,
   });
 
@@ -26,11 +26,11 @@ export async function readSheet(sheetName: string): Promise<string[][]> {
 }
 
 // ── Read all rows and return as typed objects using header map ──
-export async function readSheetAsObjects<T>(sheetName: string): Promise<T[]> {
+export async function readSheetAsObjects<T>(sheetName: string, spreadsheetId?: string): Promise<T[]> {
   const headers = SHEET_HEADERS[sheetName];
   if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
 
-  const rows = await readSheet(sheetName);
+  const rows = await readSheet(sheetName, spreadsheetId);
   return rows
     .filter((row) => row.some((cell) => cell !== ""))
     .map((row) => {
@@ -43,7 +43,7 @@ export async function readSheetAsObjects<T>(sheetName: string): Promise<T[]> {
 }
 
 // ── Append a new row to a sheet ──
-export async function appendRow(sheetName: string, values: (string | number | boolean)[]): Promise<void> {
+export async function appendRow(sheetName: string, values: (string | number | boolean)[], spreadsheetId?: string): Promise<void> {
   const sheets = getSheetsClient();
   const headers = SHEET_HEADERS[sheetName];
   if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
@@ -52,7 +52,7 @@ export async function appendRow(sheetName: string, values: (string | number | bo
   const range = `${sheetName}!A:${lastCol}`;
 
   await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: spreadsheetId ?? DEFAULT_SPREADSHEET_ID,
     range,
     valueInputOption: "USER_ENTERED",
     requestBody: {
@@ -74,7 +74,7 @@ export async function findRowIndex(sheetName: string, idColumn: string, id: stri
   const range = `${sheetName}!${col}:${col}`;
 
   const response = await getSheetsClient().spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: DEFAULT_SPREADSHEET_ID,
     range,
   });
 
@@ -102,7 +102,7 @@ export async function updateRow(
   const range = `${sheetName}!A${rowIndex}:${lastCol}${rowIndex}`;
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: DEFAULT_SPREADSHEET_ID,
     range,
     valueInputOption: "USER_ENTERED",
     requestBody: {
@@ -129,7 +129,7 @@ export async function updateCell(
   const range = `${sheetName}!${col}${rowIndex}`;
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: DEFAULT_SPREADSHEET_ID,
     range,
     valueInputOption: "USER_ENTERED",
     requestBody: {
@@ -168,7 +168,7 @@ export async function clearRowById(
   const range = `${sheetName}!A${rowIndex}:${lastCol}${rowIndex}`;
 
   await sheets.spreadsheets.values.clear({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: DEFAULT_SPREADSHEET_ID,
     range,
   });
   return true;
@@ -181,12 +181,12 @@ export async function initializeSheet(sheetName: string): Promise<void> {
   if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
 
   // Check if sheet exists, add if not
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: DEFAULT_SPREADSHEET_ID });
   const existingSheets = spreadsheet.data.sheets?.map((s) => s.properties?.title) ?? [];
 
   if (!existingSheets.includes(sheetName)) {
     await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
+      spreadsheetId: DEFAULT_SPREADSHEET_ID,
       requestBody: {
         requests: [
           {
@@ -202,7 +202,7 @@ export async function initializeSheet(sheetName: string): Promise<void> {
   // Write headers to row 1
   const lastCol = colLetter(headers.length - 1);
   await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: DEFAULT_SPREADSHEET_ID,
     range: `${sheetName}!A1:${lastCol}1`,
     valueInputOption: "RAW",
     requestBody: {
@@ -224,7 +224,7 @@ export async function appendRows(
   const range = `${sheetName}!A:${lastCol}`;
 
   await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: DEFAULT_SPREADSHEET_ID,
     range,
     valueInputOption: "USER_ENTERED",
     requestBody: {
