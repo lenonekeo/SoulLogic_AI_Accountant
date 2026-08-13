@@ -45,7 +45,7 @@ export default function SignupPage() {
               <label className="mb-2 block text-sm font-medium text-gray-700">Choose a plan</label>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { id: "starter", name: "Starter", price: "$29/mo" },
+                  { id: "starter", name: "Starter", price: "$25/mo" },
                   { id: "pro", name: "Pro", price: "$79/mo" },
                 ].map((p) => (
                   <button

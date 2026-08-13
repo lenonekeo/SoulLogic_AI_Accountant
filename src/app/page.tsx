@@ -36,7 +36,7 @@ const features = [
 const plans = [
   {
     name: "Starter",
-    price: "$29",
+    price: "$25",
     period: "/month",
     description: "Perfect for freelancers and small businesses.",
     features: [

@@ -44,7 +44,7 @@ export function Header() {
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm">
-        <Link href="/" className="text-gray-500 hover:text-gray-700">
+        <Link href="/dashboard" className="text-gray-500 hover:text-gray-700">
           Home
         </Link>
         {segments.map((seg, i) => {
