@@ -4,6 +4,7 @@
 import "dotenv/config";
 import { initializeSheet } from "../src/lib/google/sheets";
 import { SHEETS } from "../src/types/sheets";
+import { runSeed } from "./target";
 
 async function seedSheets() {
   const sheetNames = Object.values(SHEETS);
@@ -21,4 +22,4 @@ async function seedSheets() {
   console.log("\nAll sheets initialized.");
 }
 
-seedSheets().catch(console.error);
+runSeed(seedSheets).catch(console.error);

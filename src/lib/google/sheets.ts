@@ -1,24 +1,37 @@
 import { google, sheets_v4 } from "googleapis";
 import { getGoogleAuth } from "./auth";
+import { getTenantSpreadsheetId } from "@/lib/tenant/context";
 import { SHEET_HEADERS, colLetter } from "@/types/sheets";
 
 function getSheetsClient(): sheets_v4.Sheets {
   return google.sheets({ version: "v4", auth: getGoogleAuth() });
 }
 
-const DEFAULT_SPREADSHEET_ID = process.env.GOOGLE_SPREADSHEET_ID!;
+/**
+ * Every operation below is scoped to the caller's tenant. There is no default
+ * spreadsheet: an unresolved tenant throws rather than falling back, so a
+ * missing session can never write one customer's books into another's.
+ */
+async function targetSpreadsheet(override?: string): Promise<string> {
+  return override ?? (await getTenantSpreadsheetId());
+}
+
+function headersFor(sheetName: string): string[] {
+  const headers = SHEET_HEADERS[sheetName];
+  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  return headers;
+}
 
 // ── Read all rows from a sheet tab ──
 export async function readSheet(sheetName: string, spreadsheetId?: string): Promise<string[][]> {
   const sheets = getSheetsClient();
-  const headers = SHEET_HEADERS[sheetName];
-  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  const headers = headersFor(sheetName);
 
   const lastCol = colLetter(headers.length - 1);
   const range = `${sheetName}!A2:${lastCol}`;
 
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: spreadsheetId ?? DEFAULT_SPREADSHEET_ID,
+    spreadsheetId: await targetSpreadsheet(spreadsheetId),
     range,
   });
 
@@ -27,8 +40,7 @@ export async function readSheet(sheetName: string, spreadsheetId?: string): Prom
 
 // ── Read all rows and return as typed objects using header map ──
 export async function readSheetAsObjects<T>(sheetName: string, spreadsheetId?: string): Promise<T[]> {
-  const headers = SHEET_HEADERS[sheetName];
-  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  const headers = headersFor(sheetName);
 
   const rows = await readSheet(sheetName, spreadsheetId);
   return rows
@@ -45,14 +57,13 @@ export async function readSheetAsObjects<T>(sheetName: string, spreadsheetId?: s
 // ── Append a new row to a sheet ──
 export async function appendRow(sheetName: string, values: (string | number | boolean)[], spreadsheetId?: string): Promise<void> {
   const sheets = getSheetsClient();
-  const headers = SHEET_HEADERS[sheetName];
-  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  const headers = headersFor(sheetName);
 
   const lastCol = colLetter(headers.length - 1);
   const range = `${sheetName}!A:${lastCol}`;
 
   await sheets.spreadsheets.values.append({
-    spreadsheetId: spreadsheetId ?? DEFAULT_SPREADSHEET_ID,
+    spreadsheetId: await targetSpreadsheet(spreadsheetId),
     range,
     valueInputOption: "USER_ENTERED",
     requestBody: {
@@ -62,10 +73,14 @@ export async function appendRow(sheetName: string, values: (string | number | bo
 }
 
 // ── Find the row index (1-based, including header) of a record by its ID ──
-export async function findRowIndex(sheetName: string, idColumn: string, id: string): Promise<number> {
+export async function findRowIndex(
+  sheetName: string,
+  idColumn: string,
+  id: string,
+  spreadsheetId?: string
+): Promise<number> {
   const sheets = getSheetsClient();
-  const headers = SHEET_HEADERS[sheetName];
-  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  const headers = headersFor(sheetName);
 
   const colIndex = headers.indexOf(idColumn);
   if (colIndex === -1) throw new Error(`Column ${idColumn} not found in ${sheetName}`);
@@ -73,8 +88,8 @@ export async function findRowIndex(sheetName: string, idColumn: string, id: stri
   const col = colLetter(colIndex);
   const range = `${sheetName}!${col}:${col}`;
 
-  const response = await getSheetsClient().spreadsheets.values.get({
-    spreadsheetId: DEFAULT_SPREADSHEET_ID,
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: await targetSpreadsheet(spreadsheetId),
     range,
   });
 
@@ -92,17 +107,17 @@ export async function findRowIndex(sheetName: string, idColumn: string, id: stri
 export async function updateRow(
   sheetName: string,
   rowIndex: number,
-  values: (string | number | boolean)[]
+  values: (string | number | boolean)[],
+  spreadsheetId?: string
 ): Promise<void> {
   const sheets = getSheetsClient();
-  const headers = SHEET_HEADERS[sheetName];
-  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  const headers = headersFor(sheetName);
 
   const lastCol = colLetter(headers.length - 1);
   const range = `${sheetName}!A${rowIndex}:${lastCol}${rowIndex}`;
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId: DEFAULT_SPREADSHEET_ID,
+    spreadsheetId: await targetSpreadsheet(spreadsheetId),
     range,
     valueInputOption: "USER_ENTERED",
     requestBody: {
@@ -116,11 +131,11 @@ export async function updateCell(
   sheetName: string,
   rowIndex: number,
   columnName: string,
-  value: string | number | boolean
+  value: string | number | boolean,
+  spreadsheetId?: string
 ): Promise<void> {
   const sheets = getSheetsClient();
-  const headers = SHEET_HEADERS[sheetName];
-  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  const headers = headersFor(sheetName);
 
   const colIndex = headers.indexOf(columnName);
   if (colIndex === -1) throw new Error(`Column ${columnName} not found in ${sheetName}`);
@@ -129,7 +144,7 @@ export async function updateCell(
   const range = `${sheetName}!${col}${rowIndex}`;
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId: DEFAULT_SPREADSHEET_ID,
+    spreadsheetId: await targetSpreadsheet(spreadsheetId),
     range,
     valueInputOption: "USER_ENTERED",
     requestBody: {
@@ -143,11 +158,14 @@ export async function updateById(
   sheetName: string,
   idColumn: string,
   id: string,
-  values: (string | number | boolean)[]
+  values: (string | number | boolean)[],
+  spreadsheetId?: string
 ): Promise<boolean> {
-  const rowIndex = await findRowIndex(sheetName, idColumn, id);
+  // Resolve once so the lookup and the write cannot target different books.
+  const target = await targetSpreadsheet(spreadsheetId);
+  const rowIndex = await findRowIndex(sheetName, idColumn, id, target);
   if (rowIndex === -1) return false;
-  await updateRow(sheetName, rowIndex, values);
+  await updateRow(sheetName, rowIndex, values, target);
   return true;
 }
 
@@ -155,38 +173,39 @@ export async function updateById(
 export async function clearRowById(
   sheetName: string,
   idColumn: string,
-  id: string
+  id: string,
+  spreadsheetId?: string
 ): Promise<boolean> {
   const sheets = getSheetsClient();
-  const headers = SHEET_HEADERS[sheetName];
-  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  const headers = headersFor(sheetName);
 
-  const rowIndex = await findRowIndex(sheetName, idColumn, id);
+  const target = await targetSpreadsheet(spreadsheetId);
+  const rowIndex = await findRowIndex(sheetName, idColumn, id, target);
   if (rowIndex === -1) return false;
 
   const lastCol = colLetter(headers.length - 1);
   const range = `${sheetName}!A${rowIndex}:${lastCol}${rowIndex}`;
 
   await sheets.spreadsheets.values.clear({
-    spreadsheetId: DEFAULT_SPREADSHEET_ID,
+    spreadsheetId: target,
     range,
   });
   return true;
 }
 
 // ── Create all sheet tabs with headers (used by seed script) ──
-export async function initializeSheet(sheetName: string): Promise<void> {
+export async function initializeSheet(sheetName: string, spreadsheetId?: string): Promise<void> {
   const sheets = getSheetsClient();
-  const headers = SHEET_HEADERS[sheetName];
-  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  const headers = headersFor(sheetName);
+  const target = await targetSpreadsheet(spreadsheetId);
 
   // Check if sheet exists, add if not
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: DEFAULT_SPREADSHEET_ID });
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: target });
   const existingSheets = spreadsheet.data.sheets?.map((s) => s.properties?.title) ?? [];
 
   if (!existingSheets.includes(sheetName)) {
     await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: DEFAULT_SPREADSHEET_ID,
+      spreadsheetId: target,
       requestBody: {
         requests: [
           {
@@ -202,7 +221,7 @@ export async function initializeSheet(sheetName: string): Promise<void> {
   // Write headers to row 1
   const lastCol = colLetter(headers.length - 1);
   await sheets.spreadsheets.values.update({
-    spreadsheetId: DEFAULT_SPREADSHEET_ID,
+    spreadsheetId: target,
     range: `${sheetName}!A1:${lastCol}1`,
     valueInputOption: "RAW",
     requestBody: {
@@ -214,17 +233,17 @@ export async function initializeSheet(sheetName: string): Promise<void> {
 // ── Batch append multiple rows ──
 export async function appendRows(
   sheetName: string,
-  rows: (string | number | boolean)[][]
+  rows: (string | number | boolean)[][],
+  spreadsheetId?: string
 ): Promise<void> {
   const sheets = getSheetsClient();
-  const headers = SHEET_HEADERS[sheetName];
-  if (!headers) throw new Error(`Unknown sheet: ${sheetName}`);
+  const headers = headersFor(sheetName);
 
   const lastCol = colLetter(headers.length - 1);
   const range = `${sheetName}!A:${lastCol}`;
 
   await sheets.spreadsheets.values.append({
-    spreadsheetId: DEFAULT_SPREADSHEET_ID,
+    spreadsheetId: await targetSpreadsheet(spreadsheetId),
     range,
     valueInputOption: "USER_ENTERED",
     requestBody: {

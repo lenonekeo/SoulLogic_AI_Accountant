@@ -4,6 +4,7 @@
 import "dotenv/config";
 import { appendRow } from "../src/lib/google/sheets";
 import { SHEETS } from "../src/types/sheets";
+import { runSeed } from "./target";
 
 const COA_SEEDS = [
   // Assets
@@ -58,4 +59,4 @@ async function seedCoA() {
   console.log("\nChart of Accounts seeded.");
 }
 
-seedCoA().catch(console.error);
+runSeed(seedCoA).catch(console.error);

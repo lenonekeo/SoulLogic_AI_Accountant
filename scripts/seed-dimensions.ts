@@ -4,6 +4,7 @@
 import "dotenv/config";
 import { appendRow } from "../src/lib/google/sheets";
 import { SHEETS } from "../src/types/sheets";
+import { runSeed } from "./target";
 
 const today = new Date().toISOString().split("T")[0];
 
@@ -33,4 +34,4 @@ async function seedDimensions() {
   console.log("\nDimension slots seeded.");
 }
 
-seedDimensions().catch(console.error);
+runSeed(seedDimensions).catch(console.error);

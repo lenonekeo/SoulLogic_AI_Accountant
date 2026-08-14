@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "verify:tenant": "tsx scripts/verify-tenant.ts",
     "seed:sheets": "tsx scripts/seed-sheets.ts",
     "seed:coa": "tsx scripts/seed-coa.ts",
     "seed:dimensions": "tsx scripts/seed-dimensions.ts"
