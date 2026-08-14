@@ -5,6 +5,7 @@ import { SalesInvoice, LineItem, Client } from "@/types/entities";
 import { InvoiceStatus, SourceInput, SourceModule, DocType, EntityType, ID_PREFIXES } from "@/types/enums";
 import { postDocument } from "@/lib/accounting/posting";
 import { uploadDocument } from "@/lib/google/drive";
+import { getTenant } from "@/lib/tenant/context";
 import { generateInvoicePdf } from "@/lib/pdf/invoice-template";
 import { ok, error } from "@/lib/utils/api-helpers";
 import { NotFoundError } from "@/lib/utils/errors";
@@ -40,7 +41,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       `${invoice.Invoice_ID}.pdf`,
       invoice.Client_ID,
       "Sales_Invoices",
-      year
+      year,
+      (await getTenant()).email
     );
 
     // 3. Build posting lines

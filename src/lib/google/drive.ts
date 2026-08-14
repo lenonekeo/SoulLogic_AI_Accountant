@@ -49,11 +49,12 @@ export async function ensureFolderPath(clientId: string, docType: string, year?:
   return yearFolderId;
 }
 
-// ── Upload a PDF buffer to Google Drive and return the public URL ──
+// ── Upload a PDF buffer to Google Drive and return its URL ──
 export async function uploadPdf(
   pdfBuffer: Buffer,
   fileName: string,
-  folderId: string
+  folderId: string,
+  shareWithEmail?: string
 ): Promise<{ fileId: string; url: string }> {
   const drive = getDriveClient();
 
@@ -74,16 +75,22 @@ export async function uploadPdf(
 
   const fileId = created.data.id!;
 
-  // Make file publicly readable
-  await drive.permissions.create({
-    fileId,
-    requestBody: {
-      role: "reader",
-      type: "anyone",
-    },
-  });
+  // Grant read access to the owner of the book this document belongs to, and
+  // to nobody else. These are customer invoices: they must never be readable
+  // by anyone holding the link.
+  if (shareWithEmail) {
+    await drive.permissions.create({
+      fileId,
+      requestBody: {
+        role: "reader",
+        type: "user",
+        emailAddress: shareWithEmail,
+      },
+      sendNotificationEmail: false,
+    });
+  }
 
-  const url = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
+  const url = `https://drive.google.com/file/d/${fileId}/view`;
   return { fileId, url };
 }
 
@@ -93,10 +100,11 @@ export async function uploadDocument(
   fileName: string,
   clientId: string,
   docType: string,
-  year?: string
+  year?: string,
+  shareWithEmail?: string
 ): Promise<string> {
   const folderId = await ensureFolderPath(clientId, docType, year);
-  const { url } = await uploadPdf(pdfBuffer, fileName, folderId);
+  const { url } = await uploadPdf(pdfBuffer, fileName, folderId, shareWithEmail);
   return url;
 }
 

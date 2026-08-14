@@ -175,8 +175,10 @@ export function extractDimensions(obj: DimensionFields): DimensionFields {
   };
 }
 
-// ── Build dimension array (ordered 1-8) for sheet row ──
-export function dimensionArray(dims: DimensionFields): string[] {
+// ── Build the trailing dimension columns for a sheet row ──
+// Must stay the same width as DIMENSION_HEADERS: dimensions 1-8 followed by
+// Account_No, which stamps the row with the tenant that owns it.
+export function dimensionArray(dims: DimensionFields, accountNo = ""): string[] {
   return [
     dims.Dimension_1 ?? "",
     dims.Dimension_2 ?? "",
@@ -186,5 +188,6 @@ export function dimensionArray(dims: DimensionFields): string[] {
     dims.Dimension_6 ?? "",
     dims.Dimension_7 ?? "",
     dims.Dimension_8 ?? "",
+    accountNo,
   ];
 }

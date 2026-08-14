@@ -5,6 +5,8 @@ import { authOptions } from "@/lib/auth/options";
 export interface TenantContext {
   accountNo: string;
   spreadsheetId: string;
+  /** Owner of this book — uploaded documents are shared with them. */
+  email?: string;
 }
 
 /**
@@ -40,9 +42,9 @@ export function getExplicitTenant(): TenantContext | undefined {
  * Throws when neither is available — there is deliberately no default, because
  * a default would silently write one customer's data into another's book.
  */
-export async function getTenantSpreadsheetId(): Promise<string> {
+export async function getTenant(): Promise<TenantContext> {
   const explicit = store.getStore();
-  if (explicit) return explicit.spreadsheetId;
+  if (explicit) return explicit;
 
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -51,11 +53,25 @@ export async function getTenantSpreadsheetId(): Promise<string> {
     );
   }
 
-  const spreadsheetId = (session as { spreadsheetId?: string }).spreadsheetId;
+  const { spreadsheetId, accountNo } = session as {
+    spreadsheetId?: string;
+    accountNo?: string;
+  };
   if (!spreadsheetId) {
     throw new TenantResolutionError(
       "Signed-in user has no spreadsheetId — account is not provisioned"
     );
   }
-  return spreadsheetId;
+  return {
+    accountNo: accountNo ?? "",
+    spreadsheetId,
+    email: session.user?.email ?? undefined,
+  };
+}
+
+export async function getTenantSpreadsheetId(): Promise<string> {
+  // Fast path: avoid decoding the session when a tenant is already explicit.
+  const explicit = store.getStore();
+  if (explicit) return explicit.spreadsheetId;
+  return (await getTenant()).spreadsheetId;
 }

@@ -6,6 +6,7 @@ import { PaymentStatus, SourceInput, SourceModule, DocType, EntityType } from "@
 import { postDocument } from "@/lib/accounting/posting";
 import { generatePaystubPdf } from "@/lib/pdf/paystub-template";
 import { uploadDocument } from "@/lib/google/drive";
+import { getTenant } from "@/lib/tenant/context";
 import { ok, error } from "@/lib/utils/api-helpers";
 import { NotFoundError } from "@/lib/utils/errors";
 import { today } from "@/lib/utils/date";
@@ -36,7 +37,8 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
       `${entry.Payroll_ID}_${entry.Employee_ID}.pdf`,
       "PAYROLL", // Global payroll folder
       "Payroll",
-      year
+      year,
+      (await getTenant()).email
     );
 
     const empName = `${employee.First_Name} ${employee.Last_Name}`;
