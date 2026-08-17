@@ -37,10 +37,12 @@ export async function GET(req: NextRequest) {
         // Which customer's book this belongs to — by recipient, since the
         // vendor is the sender.
         const resolved = await resolveTenantAccount(email);
-        if (!resolved) {
-          // Leave it untouched: nobody to file it for, and a later account
-          // could still claim it.
-          console.warn(`[email-check] No account matched message ${messageId}`);
+        if (!resolved.account) {
+          // Leave it untouched. Unclaimed mail may belong to an account that
+          // does not exist yet, and ambiguous mail must not be guessed at —
+          // filing one customer's invoice into another's books is worse than
+          // leaving it for a human.
+          console.warn(`[email-check] ${resolved.reason} for message ${messageId}`);
           unclaimed.push(messageId);
           continue;
         }
