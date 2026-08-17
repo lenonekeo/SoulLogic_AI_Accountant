@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { ok, error } from "@/lib/utils/api-helpers";
-import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment, markAsRead, getEmailHeader } from "@/lib/google/gmail";
-import { getAccountByEmail } from "@/lib/google/accounts";
+import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment, markProcessed, getEmailHeader } from "@/lib/google/gmail";
+import { resolveTenantAccount } from "@/lib/google/resolve-tenant-email";
 import { runWithTenant } from "@/lib/tenant/context";
 import { invoiceSearchQuery } from "@/lib/google/invoice-query";
 import { ingestInvoiceAttachment } from "@/lib/invoices/ingest";
@@ -9,12 +9,8 @@ import { ingestInvoiceAttachment } from "@/lib/invoices/ingest";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Pull the bare address out of a `Name <addr@host>` From header. */
-function parseFromAddress(from: string): string | null {
-  const angled = from.match(/<([^>]+)>/);
-  const candidate = (angled ? angled[1] : from).trim().toLowerCase();
-  return candidate.includes("@") ? candidate : null;
-}
+/** How many messages one sweep examines. */
+const BATCH_SIZE = Number(process.env.EMAIL_CHECK_BATCH_SIZE ?? 25);
 
 export async function GET(req: NextRequest) {
   // Verify Vercel cron secret
@@ -24,16 +20,13 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Only process emails that have attachments AND match invoice-related keywords
-    // OR come from the user themselves (mobile share)
-    const monitorAddress = process.env.GMAIL_MONITOR_ADDRESS ?? "";
-    const messages = await listUnreadEmails(
-      invoiceSearchQuery(monitorAddress)
-    );
-    const processed: string[] = [];
-    const skipped: string[] = [];
+    const messages = await listUnreadEmails(invoiceSearchQuery());
+    const filed: string[] = [];
+    const examined: string[] = [];
+    const unclaimed: string[] = [];
+    const failed: string[] = [];
 
-    for (const msg of messages.slice(0, 10)) {
+    for (const msg of messages.slice(0, BATCH_SIZE)) {
       const messageId = msg.id;
       if (!messageId) continue;
       try {
@@ -41,17 +34,19 @@ export async function GET(req: NextRequest) {
         const attachments = getPdfAttachments(email);
         const from = getEmailHeader(email, "From");
 
-        // The sender decides which customer's book this invoice belongs to.
-        // Without a match there is no safe place to file it, so leave the mail
-        // unread for a human rather than guessing.
-        const senderAddress = parseFromAddress(from);
-        const account = senderAddress ? await getAccountByEmail(senderAddress) : null;
-        if (!account?.Spreadsheet_ID) {
-          console.warn(`[email-check] No account for sender of message ${messageId}; skipping`);
-          skipped.push(messageId);
+        // Which customer's book this belongs to — by recipient, since the
+        // vendor is the sender.
+        const resolved = await resolveTenantAccount(email);
+        if (!resolved) {
+          // Leave it untouched: nobody to file it for, and a later account
+          // could still claim it.
+          console.warn(`[email-check] No account matched message ${messageId}`);
+          unclaimed.push(messageId);
           continue;
         }
+        const { account } = resolved;
 
+        let anyFailed = false;
         await runWithTenant(
           {
             accountNo: account.Account_No,
@@ -70,22 +65,39 @@ export async function GET(req: NextRequest) {
                 });
                 if (result.status === "filed") {
                   console.log(`[email-check] Filed ${result.purchInvId} for ${account.Account_No}`);
+                  filed.push(result.purchInvId);
                 }
               } catch (attErr) {
+                anyFailed = true;
                 console.error("[email-check] Attachment error:", attachment.filename, attErr);
               }
             }
           }
         );
 
-        await markAsRead(messageId);
-        processed.push(messageId);
+        // Label only once every attachment resolved one way or the other, so a
+        // transient failure is retried on the next sweep instead of being
+        // quietly dropped.
+        if (anyFailed) {
+          failed.push(messageId);
+        } else {
+          await markProcessed(messageId);
+          examined.push(messageId);
+        }
       } catch (msgErr) {
+        failed.push(messageId);
         console.error("Error processing email:", messageId, msgErr);
       }
     }
 
-    return ok({ processed: processed.length, skipped: skipped.length, messageIds: processed });
+    return ok({
+      candidates: messages.length,
+      examined: examined.length,
+      filed: filed.length,
+      unclaimed: unclaimed.length,
+      failed: failed.length,
+      purchInvIds: filed,
+    });
   } catch (err) {
     console.error("Email check cron error:", err);
     return error("Failed to check emails");

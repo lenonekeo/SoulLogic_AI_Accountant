@@ -40,7 +40,7 @@ async function main() {
   }
 
   console.log("\n4. Gmail access (OAuth refresh token)");
-  const query = invoiceSearchQuery(monitor);
+  const query = invoiceSearchQuery();
   try {
     const msgs = await listUnreadEmails(query);
     ok(`query matched ${msgs.length} unread message(s)`);

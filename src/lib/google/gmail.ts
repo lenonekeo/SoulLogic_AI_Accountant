@@ -160,3 +160,48 @@ export function getPdfAttachments(
   scanParts(parts);
   return results;
 }
+
+// ── The label this pipeline uses to remember what it has already looked at ──
+export const PROCESSED_LABEL = "SoulLogic/Processed";
+
+let _labelId: string | null = null;
+
+/** Resolve the processing label, creating it on first use. */
+export async function getProcessedLabelId(): Promise<string> {
+  if (_labelId) return _labelId;
+  const gmail = getGmailClient();
+
+  const existing = await gmail.users.labels.list({ userId: "me" });
+  const found = existing.data.labels?.find((l) => l.name === PROCESSED_LABEL);
+  if (found?.id) {
+    _labelId = found.id;
+    return _labelId;
+  }
+
+  const created = await gmail.users.labels.create({
+    userId: "me",
+    requestBody: {
+      name: PROCESSED_LABEL,
+      labelListVisibility: "labelShow",
+      messageListVisibility: "show",
+    },
+  });
+  _labelId = created.data.id!;
+  return _labelId;
+}
+
+/**
+ * Mark a message as handled by this pipeline.
+ *
+ * A label rather than the read flag: the search has to exclude what it has
+ * already examined, and clearing UNREAD on every non-invoice would silently
+ * mark unrelated mail as read in someone's inbox.
+ */
+export async function markProcessed(messageId: string): Promise<void> {
+  const gmail = getGmailClient();
+  await gmail.users.messages.modify({
+    userId: "me",
+    id: messageId,
+    requestBody: { addLabelIds: [await getProcessedLabelId()] },
+  });
+}

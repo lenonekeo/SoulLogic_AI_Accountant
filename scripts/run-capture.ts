@@ -8,7 +8,7 @@
 import { config } from "dotenv";
 config({ path: ".env.local", quiet: true } as never);
 
-import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment, getEmailHeader, markAsRead } from "../src/lib/google/gmail";
+import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment, getEmailHeader, markProcessed } from "../src/lib/google/gmail";
 import { runWithTenant } from "../src/lib/tenant/context";
 import { ingestInvoiceAttachment } from "../src/lib/invoices/ingest";
 import { invoiceSearchQuery } from "../src/lib/google/invoice-query";
@@ -23,7 +23,7 @@ const has = (name: string) => process.argv.includes(`--${name}`);
 async function main() {
   const limit = Number(arg("limit") ?? 5);
   const dryRun = has("dry-run");
-  const keepUnread = has("keep-unread");
+  const keepUnread = has("keep-unread");  // skip labelling, for repeat runs
 
   const spreadsheetId = normalizeSpreadsheetId(arg("spreadsheet") ?? process.env.GOOGLE_SPREADSHEET_ID!);
   const accountNo = arg("account") ?? "ACC-001";
@@ -35,7 +35,7 @@ async function main() {
   console.log(`Limit       : ${limit}${dryRun ? "   [DRY RUN — nothing will be written]" : ""}\n`);
 
   const messages = await listUnreadEmails(
-    invoiceSearchQuery(monitor)
+    invoiceSearchQuery()
   );
   console.log(`${messages.length} unread candidate(s); processing up to ${limit}.\n`);
 
@@ -81,9 +81,9 @@ async function main() {
       }
     });
 
-    // Only clear the flag once something was filed, so a failure stays visible
-    // in the inbox for a retry.
-    if (anyFiled && !keepUnread) await markAsRead(messageId);
+    // Label only when something was filed, so failures stay in the candidate
+    // set for a retry.
+    if (anyFiled && !keepUnread) await markProcessed(messageId);
   }
 
   console.log(`\nfiled=${filed}  not-an-invoice=${notInvoice}  errors=${failed}\n`);
