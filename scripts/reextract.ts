@@ -2,7 +2,13 @@
 // update the row in place. Use after an extraction improvement, or when a row
 // looks wrong.
 //
-// Run: npm run reextract -- <PurchInv_ID> "<gmail query>" [--dry-run]
+// Run: npm run reextract -- <PurchInv_ID> ["<gmail query>"] [--only F1,F2] [--dry-run]
+//
+// --only limits the rewrite to the named fields, for filling a newly-added
+// column without disturbing values a human may since have curated.
+//
+// With no gmail query the archived copy in Drive is used, which is the source
+// of record and still there when the original email is long gone.
 //
 // Only the extracted fields are rewritten. Anything decided after filing —
 // payment, approval, GL posting, the stored PDF — is preserved.
@@ -10,8 +16,11 @@ import { config } from "dotenv";
 config({ path: ".env.local", quiet: true } as never);
 
 import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment } from "../src/lib/google/gmail";
+import { downloadFile, fileIdFromUrl } from "../src/lib/google/drive";
+import { sniffContentType } from "../src/lib/utils/content-type";
 import { parseInvoiceImage, parseInvoiceDocument } from "../src/lib/ai/document-parser";
 import { categorizeExpense } from "../src/lib/ai/categorizer";
+import { resolveVendor } from "../src/lib/accounting/vendors";
 import { readSheet, updateById } from "../src/lib/google/sheets";
 import { runWithTenant } from "../src/lib/tenant/context";
 import { normalizeSpreadsheetId } from "../src/lib/google/spreadsheet-id";
@@ -19,17 +28,28 @@ import { SHEET_HEADERS, SHEETS } from "../src/types/sheets";
 
 // Fields that describe what was extracted from the document.
 const REWRITTEN = [
-  "Vendor_Invoice_No", "Invoice_Date", "Line_Items", "GL_Account_Code",
+  "Vendor_ID", "Vendor_Name", "Vendor_Invoice_No", "Invoice_Date", "Line_Items", "GL_Account_Code",
   "GL_Account_Name", "Subtotal", "Tax_Amount", "Tax1_Amount", "Tax2_Amount",
   "Total_Amount", "Balance_Due",
 ] as const;
 
 async function main() {
   const purchInvId = process.argv[2];
-  const query = process.argv[3];
+  const queryArg = process.argv[3];
+  const query = queryArg && !queryArg.startsWith("--") ? queryArg : undefined;
   const dryRun = process.argv.includes("--dry-run");
-  if (!purchInvId || !query) {
-    console.error('Usage: npm run reextract -- <PurchInv_ID> "<gmail query>" [--dry-run]');
+  const onlyIdx = process.argv.indexOf("--only");
+  const only = onlyIdx === -1 ? null : (process.argv[onlyIdx + 1] ?? "").split(",").map((f) => f.trim()).filter(Boolean);
+  if (only) {
+    const unknown = only.filter((f) => !(REWRITTEN as readonly string[]).includes(f));
+    if (unknown.length) {
+      console.error(`--only names field(s) this tool does not rewrite: ${unknown.join(", ")}`);
+      console.error(`rewritable: ${REWRITTEN.join(", ")}`);
+      process.exit(1);
+    }
+  }
+  if (!purchInvId) {
+    console.error('Usage: npm run reextract -- <PurchInv_ID> ["<gmail query>"] [--dry-run]');
     process.exit(1);
   }
 
@@ -49,17 +69,29 @@ async function main() {
     // Start from the stored row so every unlisted field carries over verbatim.
     const row: (string | number | boolean)[] = headers.map((_, i) => existing[i] ?? "");
 
-    const messages = await listUnreadEmails(query);
-    if (messages.length === 0) throw new Error(`No message matched: ${query}`);
-    const email = await getEmail(messages[0].id!);
-    const attachments = getPdfAttachments(email);
-    if (attachments.length !== 1) {
-      throw new Error(`Expected exactly 1 attachment, found ${attachments.length}`);
+    let buffer: Buffer;
+    let sourceLabel: string;
+    if (query) {
+      const messages = await listUnreadEmails(query);
+      if (messages.length === 0) throw new Error(`No message matched: ${query}`);
+      const email = await getEmail(messages[0].id!);
+      const attachments = getPdfAttachments(email);
+      if (attachments.length !== 1) {
+        throw new Error(`Expected exactly 1 attachment, found ${attachments.length}`);
+      }
+      buffer = await getAttachment(messages[0].id!, attachments[0].attachmentId);
+      sourceLabel = `email attachment ${attachments[0].filename}`;
+    } else {
+      const url = String(existing[col("PDF_URL")] ?? "");
+      const fileId = url ? fileIdFromUrl(url) : null;
+      if (!fileId) throw new Error(`${purchInvId} has no usable PDF_URL to re-read; pass a gmail query instead`);
+      buffer = await downloadFile(fileId);
+      sourceLabel = `Drive archive ${fileId}`;
     }
-    const attachment = attachments[0];
-    const buffer = await getAttachment(messages[0].id!, attachment.attachmentId);
 
-    const mime = attachment.mimeType.toLowerCase();
+    // Trust the bytes, not the stored extension — archived phone photos were
+    // written with a .pdf name.
+    const mime = sniffContentType(buffer).mimeType;
     const parsed = mime.startsWith("image/")
       ? await parseInvoiceImage(buffer, mime === "image/png" ? "image/png" : "image/jpeg")
       : await parseInvoiceDocument(buffer);
@@ -77,7 +109,11 @@ async function main() {
     const taxLines = parsed.taxes ?? [];
     const amountPaid = Number(existing[col("Amount_Paid")] ?? 0) || 0;
 
+    const vendor = await resolveVendor(parsed.vendorName);
+
     const updates: Record<string, string> = {
+      Vendor_ID: vendor.vendorId,
+      Vendor_Name: vendor.vendorName,
       Vendor_Invoice_No: parsed.invoiceNumber ?? "",
       Invoice_Date: parsed.date ?? String(existing[col("Invoice_Date")] ?? ""),
       Line_Items: categorizations.map(({ li }) => li.description).join(" | "),
@@ -91,8 +127,11 @@ async function main() {
       Balance_Due: (total - amountPaid).toFixed(2),
     };
 
-    console.log(`\n${purchInvId} — ${attachment.filename}\n`);
-    for (const field of REWRITTEN) {
+    const fields: string[] = only ?? [...REWRITTEN];
+    console.log(`\n${purchInvId} — ${sourceLabel} (${mime})`);
+    if (only) console.log(`  rewriting only: ${only.join(", ")}`);
+    console.log("");
+    for (const field of fields) {
       const before = String(existing[col(field)] ?? "");
       const after = updates[field];
       const changed = before !== after;
@@ -100,7 +139,7 @@ async function main() {
       row[col(field)] = after;
     }
 
-    const preserved = headers.filter((h) => !(REWRITTEN as readonly string[]).includes(h));
+    const preserved = headers.filter((h) => !fields.includes(h));
     console.log(`\n  preserved: ${preserved.join(", ")}\n`);
 
     if (dryRun) {

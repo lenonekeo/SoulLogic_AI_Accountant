@@ -9,6 +9,7 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "doctor": "tsx scripts/doctor.ts",
+    "migrate:column": "tsx scripts/migrate-add-column.ts",
     "init:master": "tsx scripts/init-master.ts",
     "add:account": "tsx scripts/add-account.ts",
     "reextract": "tsx scripts/reextract.ts",

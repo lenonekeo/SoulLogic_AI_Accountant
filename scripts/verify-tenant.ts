@@ -58,6 +58,8 @@ async function main() {
   const headers = SHEET_HEADERS[SHEETS.PurchaseInvoices];
   const row = buildPurchaseInvoiceRow({
     purchInvId: "PI-0001",
+    vendorId: "VEN-0007",
+    vendorName: "Acme Supplies",
     vendorInvoiceNo: "INV-9",
     invoiceDate: "2026-01-01",
     lineItems: "Widget | Gadget",
@@ -86,6 +88,10 @@ async function main() {
   check("GL_Account_Code lands in its column", row[glIdx] === "6000", `(got ${row[glIdx]})`);
   const acctIdx = headers.indexOf("Account_No");
   check("Account_No stamps the owning tenant", row[acctIdx] === "ACC-42", `(got ${row[acctIdx]})`);
+  const vidIdx = headers.indexOf("Vendor_ID");
+  check("Vendor_ID lands in its column", row[vidIdx] === "VEN-0007", `(got ${row[vidIdx]})`);
+  const vnIdx = headers.indexOf("Vendor_Name");
+  check("Vendor_Name lands in its column", row[vnIdx] === "Acme Supplies", `(got ${row[vnIdx]})`);
 
   console.log("\n-- fails closed with no tenant and no session --");
   try {

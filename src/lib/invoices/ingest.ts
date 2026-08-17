@@ -3,11 +3,13 @@ import { categorizeExpense } from "@/lib/ai/categorizer";
 import { appendRow } from "@/lib/google/sheets";
 import { getOrCreateFolder, uploadPdf } from "@/lib/google/drive";
 import { getTenant } from "@/lib/tenant/context";
+import { resolveVendor } from "@/lib/accounting/vendors";
 import { nextId } from "@/lib/accounting/id-generator";
 import { dimensionArray } from "@/lib/accounting/dimensions";
 import { SHEETS } from "@/types/sheets";
 import { ID_PREFIXES, PurchaseStatus } from "@/types/enums";
 import { today } from "@/lib/utils/date";
+import { sniffContentType } from "@/lib/utils/content-type";
 
 export interface IngestInput {
   buffer: Buffer;
@@ -50,9 +52,17 @@ export async function ingestInvoiceAttachment(input: IngestInput): Promise<Inges
   // Allocate the ID first: it names the stored file too.
   const purchInvId = await nextId(SHEETS.PurchaseInvoices, "PurchInv_ID", ID_PREFIXES.PurchaseInvoice);
 
+  const vendor = await resolveVendor(parsed.vendorName);
+
   const invoiceNo = parsed.invoiceNumber ? `_${parsed.invoiceNumber}` : "";
-  const documentName = `${purchInvId}${invoiceNo}_${parsed.vendorName ?? "Vendor"}.pdf`
-    .replace(/[^a-zA-Z0-9._\-() ]/g, "_"); // sanitize filename
+  // Strip only what a filename genuinely cannot carry. The previous
+  // [^a-zA-Z0-9...] class replaced every accented character with an
+  // underscore, turning "École" into "_cole" on Quebec invoices.
+  const { extension } = sniffContentType(buffer);
+  const documentName = `${purchInvId}${invoiceNo}_${vendor.vendorName || "Vendor"}.${extension}`
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/\s+/g, " ")
+    .trim();
 
   const tenant = await getTenant();
 
@@ -98,6 +108,8 @@ export async function ingestInvoiceAttachment(input: IngestInput): Promise<Inges
 
   const row = buildPurchaseInvoiceRow({
     purchInvId,
+    vendorId: vendor.vendorId,
+    vendorName: vendor.vendorName,
     vendorInvoiceNo: parsed.invoiceNumber ?? "",
     invoiceDate: parsed.date ?? today(),
     lineItems,
@@ -120,6 +132,8 @@ export async function ingestInvoiceAttachment(input: IngestInput): Promise<Inges
 
 export interface PurchaseInvoiceRowFields {
   purchInvId: string;
+  vendorId: string;
+  vendorName: string;
   vendorInvoiceNo: string;
   invoiceDate: string;
   lineItems: string;
@@ -144,7 +158,8 @@ export interface PurchaseInvoiceRowFields {
 export function buildPurchaseInvoiceRow(f: PurchaseInvoiceRowFields): (string | number | boolean)[] {
   return [
     f.purchInvId,             // PurchInv_ID
-    "",                       // Vendor_ID — to be matched manually
+    f.vendorId,               // Vendor_ID
+    f.vendorName,             // Vendor_Name
     f.vendorInvoiceNo,        // Vendor_Invoice_No
     f.invoiceDate,            // Invoice_Date
     today(),                  // Due_Date — estimated

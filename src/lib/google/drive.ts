@@ -1,6 +1,7 @@
 import { google, drive_v3 } from "googleapis";
 import { Readable } from "stream";
 import { getGoogleAuth, getGmailAuth } from "./auth";
+import { sniffContentType } from "@/lib/utils/content-type";
 
 function getDriveClient(): drive_v3.Drive {
   // Use OAuth user credentials so uploads count against user quota (not service account)
@@ -54,7 +55,7 @@ export async function ensureFolderPath(clientId: string, docType: string, year?:
   return yearFolderId;
 }
 
-// ── Upload a PDF buffer to Google Drive and return its URL ──
+// ── Upload a document buffer to Google Drive and return its URL ──
 export async function uploadPdf(
   pdfBuffer: Buffer,
   fileName: string,
@@ -64,15 +65,18 @@ export async function uploadPdf(
   const drive = getDriveClient();
 
   const stream = Readable.from(pdfBuffer);
+  // Read the type from the bytes: phone photos arrive alongside PDFs, and
+  // labelling a JPEG application/pdf leaves Drive unable to preview it.
+  const { mimeType } = sniffContentType(pdfBuffer);
 
   const created = await drive.files.create({
     requestBody: {
       name: fileName,
-      mimeType: "application/pdf",
+      mimeType,
       parents: [folderId],
     },
     media: {
-      mimeType: "application/pdf",
+      mimeType,
       body: stream,
     },
     fields: "id",
@@ -111,6 +115,21 @@ export async function uploadDocument(
   const folderId = await ensureFolderPath(clientId, docType, year);
   const { url } = await uploadPdf(pdfBuffer, fileName, folderId, shareWithEmail);
   return url;
+}
+
+// ── Download a file's bytes by ID ──
+export async function downloadFile(fileId: string): Promise<Buffer> {
+  const drive = getDriveClient();
+  const res = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "arraybuffer" }
+  );
+  return Buffer.from(res.data as ArrayBuffer);
+}
+
+/** Pull the file id out of a Drive share/view URL. */
+export function fileIdFromUrl(url: string): string | null {
+  return url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ?? null;
 }
 
 // ── Delete a file by ID ──

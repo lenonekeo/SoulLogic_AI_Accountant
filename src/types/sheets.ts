@@ -170,6 +170,7 @@ export const SHEET_HEADERS: Record<string, string[]> = {
   [SHEETS.PurchaseInvoices]: [
     "PurchInv_ID",
     "Vendor_ID",
+    "Vendor_Name",
     "Vendor_Invoice_No",
     "Invoice_Date",
     "Due_Date",
