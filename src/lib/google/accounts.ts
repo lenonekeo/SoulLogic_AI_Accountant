@@ -14,7 +14,9 @@ function masterSpreadsheetId(): string {
   return normalizeSpreadsheetId(raw);
 }
 
-const HEADERS = [
+export const ACCOUNTS_SHEET = SHEET;
+
+export const HEADERS = [
   "Account_No",
   "Email",
   "Spreadsheet_ID",

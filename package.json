@@ -9,6 +9,8 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "doctor": "tsx scripts/doctor.ts",
+    "init:master": "tsx scripts/init-master.ts",
+    "add:account": "tsx scripts/add-account.ts",
     "reextract": "tsx scripts/reextract.ts",
     "test:parse": "tsx scripts/test-parse.ts",
     "verify:tenant": "tsx scripts/verify-tenant.ts",
