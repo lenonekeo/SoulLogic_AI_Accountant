@@ -8,8 +8,13 @@ function getDriveClient(): drive_v3.Drive {
   return google.drive({ version: "v3", auth });
 }
 
-const ROOT_FOLDER_ID = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID ?? "";
-console.log("[drive] ROOT_FOLDER_ID:", ROOT_FOLDER_ID ? ROOT_FOLDER_ID.slice(0, 8) + "..." : "EMPTY");
+// Resolved lazily: read at module scope this lands before dotenv has loaded in
+// scripts, silently yielding "" and uploading to the wrong Drive location.
+function rootFolderId(): string {
+  const id = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+  if (!id) throw new Error("GOOGLE_DRIVE_ROOT_FOLDER_ID is not set");
+  return id;
+}
 
 // ── Get or create a folder by name under a parent ──
 export async function getOrCreateFolder(name: string, parentId: string): Promise<string> {
@@ -42,7 +47,7 @@ export async function getOrCreateFolder(name: string, parentId: string): Promise
 export async function ensureFolderPath(clientId: string, docType: string, year?: string): Promise<string> {
   const yearStr = year ?? new Date().getFullYear().toString();
 
-  const clientFolderId = await getOrCreateFolder(clientId, ROOT_FOLDER_ID);
+  const clientFolderId = await getOrCreateFolder(clientId, rootFolderId());
   const docFolderId = await getOrCreateFolder(docType, clientFolderId);
   const yearFolderId = await getOrCreateFolder(yearStr, docFolderId);
 

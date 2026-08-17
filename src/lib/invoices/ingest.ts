@@ -61,7 +61,8 @@ export async function ingestInvoiceAttachment(input: IngestInput): Promise<Inges
   let pdfUrl = "";
   try {
     const year = today().slice(0, 4);
-    const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID!;
+    const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    if (!rootFolderId) throw new Error("GOOGLE_DRIVE_ROOT_FOLDER_ID is not set");
     const purchFolderId = await getOrCreateFolder("Purchase_Invoices", rootFolderId);
     const yearFolderId = await getOrCreateFolder(year, purchFolderId);
     const { url } = await uploadPdf(buffer, documentName, yearFolderId, tenant.email);

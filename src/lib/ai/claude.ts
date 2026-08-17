@@ -10,26 +10,55 @@ export function getClaudeClient(): Anthropic {
   return _client;
 }
 
-export const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
+export const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-5";
+
+// Thinking is on by default on current models, so the response can open with a
+// thinking block and max_tokens covers thinking plus the reply. Keep this
+// generous or long extractions truncate mid-answer.
+export const DEFAULT_MAX_TOKENS = 16000;
+
+/**
+ * Pull the reply text out of a response.
+ *
+ * Never index content[0]: with thinking enabled the first block is a thinking
+ * block, not the answer.
+ */
+export function responseText(response: Anthropic.Message): string {
+  if (response.stop_reason === "refusal") {
+    throw new Error(
+      `Claude declined this request (${response.stop_details?.category ?? "unspecified"})`
+    );
+  }
+
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+
+  if (!text) throw new Error("No text content in Claude response");
+
+  if (response.stop_reason === "max_tokens") {
+    throw new Error("Claude response hit max_tokens and is incomplete");
+  }
+  return text;
+}
 
 // ── Send a message to Claude and get a text response ──
 export async function askClaude(
   systemPrompt: string,
   userMessage: string,
-  options?: { maxTokens?: number; temperature?: number }
+  options?: { maxTokens?: number }
 ): Promise<string> {
   const client = getClaudeClient();
 
   const response = await client.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: options?.maxTokens ?? 2048,
+    max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
   });
 
-  const content = response.content[0];
-  if (content.type !== "text") throw new Error("Unexpected response type from Claude");
-  return content.text;
+  return responseText(response);
 }
 
 // ── Ask Claude and parse JSON response ──
