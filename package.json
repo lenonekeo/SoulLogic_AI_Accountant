@@ -9,6 +9,7 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "doctor": "tsx scripts/doctor.ts",
+    "test:parse": "tsx scripts/test-parse.ts",
     "verify:tenant": "tsx scripts/verify-tenant.ts",
     "seed:sheets": "tsx scripts/seed-sheets.ts",
     "seed:coa": "tsx scripts/seed-coa.ts",

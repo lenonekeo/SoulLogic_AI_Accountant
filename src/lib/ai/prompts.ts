@@ -83,6 +83,13 @@ Rules:
 - All amounts should be numbers (not strings)
 - Parse dates to YYYY-MM-DD format
 - If a field cannot be extracted, use null
+- "vendorName": whoever is being paid, as printed at the top of the document.
+  Often a person's name — sole proprietors, and professional practices such as
+  Quebec pharmacies, bill under the practitioner rather than the banner. A
+  server or cashier named down in the body of a receipt is not the vendor.
+- "lineItems": every charged line on the document, including a gratuity or tip
+  as its own entry. Line amounts plus taxes account for totalAmount; a
+  shortfall means a line is still on the document but missing here.
 - "taxes" array: list every individual tax line (e.g. GST 5% + QST 9.975% = two entries)
 - "taxAmount": total of all taxes combined (sum of taxes[].amount)
 - "taxType": primary tax type (first entry in taxes array, or null)
