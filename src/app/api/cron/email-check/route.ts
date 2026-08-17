@@ -9,7 +9,13 @@ import { ingestInvoiceAttachment } from "@/lib/invoices/ingest";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** How many messages one sweep examines. */
+// Serverless functions are killed at their duration limit, and one invoice
+// costs 30-60s of model calls. So the sweep is bounded by wall clock rather
+// than by a message count guess: it stops starting new messages once the
+// budget is nearly spent, and whatever is left stays unlabelled for the next
+// run. BATCH_SIZE remains an upper bound.
+export const maxDuration = 60;
+const TIME_BUDGET_MS = 45_000;
 const BATCH_SIZE = Number(process.env.EMAIL_CHECK_BATCH_SIZE ?? 25);
 
 export async function GET(req: NextRequest) {
@@ -20,13 +26,20 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const startedAt = Date.now();
     const messages = await listUnreadEmails(invoiceSearchQuery());
     const filed: string[] = [];
     const examined: string[] = [];
     const unclaimed: string[] = [];
     const failed: string[] = [];
 
+    let ranOutOfTime = false;
     for (const msg of messages.slice(0, BATCH_SIZE)) {
+      if (Date.now() - startedAt > TIME_BUDGET_MS) {
+        // Stop cleanly rather than being killed part-way through an invoice.
+        ranOutOfTime = true;
+        break;
+      }
       const messageId = msg.id;
       if (!messageId) continue;
       try {
@@ -98,6 +111,9 @@ export async function GET(req: NextRequest) {
       filed: filed.length,
       unclaimed: unclaimed.length,
       failed: failed.length,
+      // True when candidates remain for the next run rather than all being done.
+      moreRemaining: ranOutOfTime,
+      elapsedMs: Date.now() - startedAt,
       purchInvIds: filed,
     });
   } catch (err) {

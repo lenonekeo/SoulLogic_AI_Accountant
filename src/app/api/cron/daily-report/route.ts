@@ -8,6 +8,8 @@ import { today } from "@/lib/utils/date";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// One report per tenant; each reads several sheets.
+export const maxDuration = 60;
 
 const money = (n: number) =>
   n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
