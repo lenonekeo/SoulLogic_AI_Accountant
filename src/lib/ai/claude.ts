@@ -10,7 +10,16 @@ export function getClaudeClient(): Anthropic {
   return _client;
 }
 
-export const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-5";
+/**
+ * Resolved per call, not at module scope.
+ *
+ * ESM hoists imports above a script's dotenv call, so reading this at import
+ * time captured the fallback instead of ANTHROPIC_MODEL — scripts silently ran
+ * a different model from the deployed app.
+ */
+export function claudeModel(): string {
+  return process.env.ANTHROPIC_MODEL ?? "claude-opus-5";
+}
 
 // Thinking is on by default on current models, so the response can open with a
 // thinking block and max_tokens covers thinking plus the reply. Keep this
@@ -52,7 +61,7 @@ export async function askClaude(
   const client = getClaudeClient();
 
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: claudeModel(),
     max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],

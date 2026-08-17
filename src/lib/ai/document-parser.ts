@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getClaudeClient, CLAUDE_MODEL, DEFAULT_MAX_TOKENS, askClaudeJson, responseText } from "./claude";
+import { getClaudeClient, claudeModel, DEFAULT_MAX_TOKENS, askClaudeJson, responseText } from "./claude";
 import { DOCUMENT_PARSER_PROMPT } from "./prompts";
 import { extractPdfText } from "@/lib/pdf/parser";
 
@@ -76,7 +76,7 @@ export async function isInvoiceDocument(
   // Low effort for a yes/no check, but still enough max_tokens to cover
   // thinking plus the answer — thinking is on by default and shares the budget.
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: claudeModel(),
     max_tokens: 2048,
     output_config: { effort: "low" },
     messages: [{ role: "user", content }],
@@ -94,7 +94,7 @@ export async function parseInvoiceImage(
   const base64 = imageBuffer.toString("base64");
 
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: claudeModel(),
     max_tokens: DEFAULT_MAX_TOKENS,
     system: DOCUMENT_PARSER_PROMPT,
     messages: [
