@@ -130,6 +130,30 @@ export function getPdfAttachments(
     "image/heif",
   ];
 
+  const header = (part: gmail_v1.Schema$MessagePart, name: string): string =>
+    part.headers?.find((h) => h.name?.toLowerCase() === name)?.value ?? "";
+
+  /**
+   * Inline images are page furniture, not documents.
+   *
+   * HTML newsletters embed logos, icons and QR codes as parts that do carry an
+   * attachmentId, so counting them as attachments cost one pre-check each — a
+   * single marketing email produced 19. Content-Disposition separates them:
+   * decorations are "inline", genuinely attached documents are "attachment".
+   *
+   * Content-ID is deliberately not used. Photos mailed from Gmail on a phone —
+   * the main way receipts arrive here — carry one as well, so keying on it
+   * discarded real receipts.
+   */
+  function isInlineDecoration(part: gmail_v1.Schema$MessagePart): boolean {
+    const disposition = header(part, "content-disposition").toLowerCase();
+    if (disposition.startsWith("inline")) return true;
+    if (disposition.startsWith("attachment")) return false;
+    // No disposition to go on: fall back to size. Nothing legible survives a
+    // few KB — those are spacers, bullets and tracking pixels.
+    return (part.body?.size ?? 0) < 12_000;
+  }
+
   function scanParts(parts: gmail_v1.Schema$MessagePart[]): void {
     for (const part of parts) {
       const mime = part.mimeType?.toLowerCase() ?? "";
@@ -146,7 +170,7 @@ export function getPdfAttachments(
         filename.endsWith(".heic") ||
         filename.endsWith(".heif");
 
-      if (isSupported && part.filename && part.body?.attachmentId) {
+      if (isSupported && part.filename && part.body?.attachmentId && !isInlineDecoration(part)) {
         results.push({
           filename: part.filename,
           attachmentId: part.body.attachmentId,
