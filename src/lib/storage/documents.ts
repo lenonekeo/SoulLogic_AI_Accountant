@@ -1,4 +1,4 @@
-import { put, head } from "@vercel/blob";
+import { put, get } from "@vercel/blob";
 import { downloadFile, fileIdFromUrl, getOrCreateFolder, uploadPdf } from "@/lib/google/drive";
 import { sniffContentType } from "@/lib/utils/content-type";
 
@@ -87,12 +87,15 @@ export async function storeDocument(opts: StoreOptions): Promise<StoredDocument>
   if (blobConfigured()) {
     const { mimeType } = sniffContentType(buffer);
     const pathname = `tenants/${accountNo}/${category}/${year}/${filename}`;
+    // Private: the store rejects public access outright, and a private blob's
+    // own URL answers 403 without credentials. Reads go through this app's
+    // proxy, which checks the tenant first.
     const result = await put(pathname, buffer, {
-      access: "public", // unguessable URL; never recorded, always proxied
+      access: "private",
       addRandomSuffix: true,
       contentType: mimeType,
       token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
+    } as Parameters<typeof put>[2]);
     const locator: Locator = { kind: "blob", pathname: result.pathname };
     return { url: `${appUrl()}/api/documents/${encodeLocator(locator)}`, locator };
   }
@@ -115,9 +118,21 @@ export async function fetchDocument(locator: Locator): Promise<{ buffer: Buffer;
     return { buffer, mimeType: sniffContentType(buffer).mimeType };
   }
 
-  const meta = await head(locator.pathname, { token: process.env.BLOB_READ_WRITE_TOKEN });
-  const response = await fetch(meta.url);
-  if (!response.ok) throw new Error(`Blob fetch failed: ${response.status}`);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return { buffer, mimeType: meta.contentType ?? sniffContentType(buffer).mimeType };
+  // Read through the SDK with the store token. A private blob's own URL
+  // answers 403, so it cannot simply be fetched.
+  const result = (await get(locator.pathname, {
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+    access: "private",
+  } as Parameters<typeof get>[1])) as unknown as {
+    statusCode: number;
+    stream: ReadableStream;
+    headers?: Record<string, string>;
+  } | null;
+
+  if (!result || result.statusCode >= 400) {
+    throw new Error(`Blob read failed: ${result?.statusCode ?? "no response"}`);
+  }
+  const buffer = Buffer.from(await new Response(result.stream).arrayBuffer());
+  const declared = result.headers?.["content-type"];
+  return { buffer, mimeType: declared ?? sniffContentType(buffer).mimeType };
 }
