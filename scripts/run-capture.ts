@@ -71,7 +71,7 @@ async function main() {
             filed++;
             anyFiled = true;
           } else {
-            console.log(`    skipped ${attachment.filename} — not an invoice`);
+            console.log(`    skipped ${attachment.filename} — ${result.reason}`);
             notInvoice++;
           }
         } catch (err) {

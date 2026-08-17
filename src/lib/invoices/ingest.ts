@@ -21,7 +21,7 @@ export interface IngestInput {
 
 export type IngestResult =
   | { status: "filed"; purchInvId: string }
-  | { status: "skipped"; reason: "not-an-invoice" };
+  | { status: "skipped"; reason: "not-an-invoice" | "nothing-extracted" };
 
 function imageMimeFor(mime: string): "image/jpeg" | "image/png" | "image/webp" {
   if (mime === "image/png") return "image/png";
@@ -48,6 +48,17 @@ export async function ingestInvoiceAttachment(input: IngestInput): Promise<Inges
   const parsed = mime.startsWith("image/")
     ? await parseInvoiceImage(buffer, imageMimeFor(mime))
     : await parseInvoiceDocument(buffer);
+
+  // The pre-check can say yes to something that yields nothing — a newsletter
+  // logo passed it once and became a row with no vendor, no lines and a zero
+  // total. A document with none of those three is not a filable invoice, so
+  // stop before an ID is burned on it.
+  const hasVendor = Boolean(parsed.vendorName?.trim());
+  const hasLines = (parsed.lineItems?.length ?? 0) > 0;
+  const hasMoney = Number(parsed.totalAmount ?? 0) !== 0 || Number(parsed.subtotal ?? 0) !== 0;
+  if (!hasVendor && !hasLines && !hasMoney) {
+    return { status: "skipped", reason: "nothing-extracted" };
+  }
 
   // Allocate the ID first: it names the stored file too.
   const purchInvId = await nextId(SHEETS.PurchaseInvoices, "PurchInv_ID", ID_PREFIXES.PurchaseInvoice);

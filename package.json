@@ -9,6 +9,7 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "doctor": "tsx scripts/doctor.ts",
+    "delete:invoice": "tsx scripts/delete-invoice.ts",
     "migrate:column": "tsx scripts/migrate-add-column.ts",
     "init:master": "tsx scripts/init-master.ts",
     "add:account": "tsx scripts/add-account.ts",
