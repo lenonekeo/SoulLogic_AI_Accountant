@@ -5,6 +5,9 @@ import { runWithTenant } from "@/lib/tenant/context";
 import { ingestInvoiceAttachment } from "@/lib/invoices/ingest";
 import { ok, error } from "@/lib/utils/api-helpers";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 export const runtime = "nodejs";
 
 /** Pull the bare address out of a `Name <addr@host>` From header. */

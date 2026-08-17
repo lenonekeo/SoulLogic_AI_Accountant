@@ -9,7 +9,7 @@ config({ path: ".env.local", quiet: true } as never);
 
 import { google } from "googleapis";
 import { getGoogleAuth } from "../src/lib/google/auth";
-import { fileIdFromUrl } from "../src/lib/google/drive";
+import { locatorFromStoredUrl } from "../src/lib/storage/documents";
 import { normalizeSpreadsheetId } from "../src/lib/google/spreadsheet-id";
 import { SHEET_HEADERS, SHEETS } from "../src/types/sheets";
 
@@ -45,11 +45,13 @@ async function main() {
     .map((h) => `${h}=${row[headers.indexOf(h)] || "(empty)"}`)
     .join("  ");
   const pdfUrl = String(row[headers.indexOf("PDF_URL")] ?? "");
-  const fileId = pdfUrl ? fileIdFromUrl(pdfUrl) : null;
+  const locator = pdfUrl ? locatorFromStoredUrl(pdfUrl) : null;
+  const fileId = locator?.kind === "drive" ? locator.fileId : null;
 
   console.log(`\nrow ${rowIndex + 1}: ${purchInvId}`);
   console.log(`  ${summary}`);
-  console.log(`  Drive file: ${fileId ? (withFile ? `${fileId} — will be trashed` : `${fileId} — kept (pass --with-file to trash)`) : "none"}`);
+  const archive = locator ? (locator.kind === "drive" ? `Drive ${locator.fileId}` : `blob ${locator.pathname}`) : "none";
+  console.log(`  archive: ${archive}${fileId && withFile ? " — will be trashed" : fileId ? " — kept (pass --with-file to trash)" : ""}`);
 
   if (dryRun) {
     console.log("\n  DRY RUN — nothing deleted.\n");

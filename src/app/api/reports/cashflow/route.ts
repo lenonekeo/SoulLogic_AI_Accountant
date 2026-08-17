@@ -5,6 +5,9 @@ import { SalesReceipt, Payment, BankTransaction } from "@/types/entities";
 import { ok, error } from "@/lib/utils/api-helpers";
 import { roundMoney } from "@/lib/utils/currency";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);

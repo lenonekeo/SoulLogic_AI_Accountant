@@ -4,6 +4,9 @@ import { SHEETS } from "@/types/sheets";
 import { SubledgerEntry } from "@/types/entities";
 import { ok, error } from "@/lib/utils/api-helpers";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);

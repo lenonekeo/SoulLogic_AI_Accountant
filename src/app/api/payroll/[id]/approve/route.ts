@@ -11,6 +11,9 @@ import { ok, error } from "@/lib/utils/api-helpers";
 import { NotFoundError } from "@/lib/utils/errors";
 import { today } from "@/lib/utils/date";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(_req: NextRequest, { params }: Ctx) {

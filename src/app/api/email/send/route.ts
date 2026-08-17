@@ -2,6 +2,9 @@ import { NextRequest } from "next/server";
 import { sendEmail } from "@/lib/google/gmail";
 import { ok, error } from "@/lib/utils/api-helpers";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const { to, subject, html, attachments } = await req.json();

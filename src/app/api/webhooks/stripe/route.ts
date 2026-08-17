@@ -9,6 +9,9 @@ import {
 } from "@/lib/google/accounts";
 import { sendEmail } from "@/lib/google/gmail";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 export const runtime = "nodejs";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);

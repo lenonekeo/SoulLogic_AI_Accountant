@@ -4,6 +4,9 @@ import { extractIntent } from "@/lib/ai/intent";
 import { routeIntent } from "@/lib/chat/router";
 import { ok, error } from "@/lib/utils/api-helpers";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const { audio, platform, userId, mimeType } = await req.json();

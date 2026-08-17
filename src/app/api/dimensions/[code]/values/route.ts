@@ -7,6 +7,9 @@ import { nextId } from "@/lib/accounting/id-generator";
 import { ok, error } from "@/lib/utils/api-helpers";
 import { today } from "@/lib/utils/date";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 type Ctx = { params: Promise<{ code: string }> };
 
 export async function GET(_req: NextRequest, { params }: Ctx) {

@@ -7,6 +7,9 @@ import { nextId } from "@/lib/accounting/id-generator";
 import { parseBankCsvRow } from "@/lib/accounting/reconciliation";
 import { ok, error } from "@/lib/utils/api-helpers";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();

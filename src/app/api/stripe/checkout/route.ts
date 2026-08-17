@@ -2,6 +2,9 @@ import { NextRequest } from "next/server";
 import Stripe from "stripe";
 import { ok, error } from "@/lib/utils/api-helpers";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const PRICE_IDS: Record<string, string> = {

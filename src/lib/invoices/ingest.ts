@@ -1,8 +1,8 @@
 import { parseInvoiceDocument, parseInvoiceImage, isInvoiceDocument } from "@/lib/ai/document-parser";
 import { categorizeExpense } from "@/lib/ai/categorizer";
 import { appendRow } from "@/lib/google/sheets";
-import { getOrCreateFolder, uploadPdf } from "@/lib/google/drive";
 import { getTenant } from "@/lib/tenant/context";
+import { storeDocument } from "@/lib/storage/documents";
 import { resolveVendor } from "@/lib/accounting/vendors";
 import { nextId } from "@/lib/accounting/id-generator";
 import { dimensionArray } from "@/lib/accounting/dimensions";
@@ -77,21 +77,23 @@ export async function ingestInvoiceAttachment(input: IngestInput): Promise<Inges
 
   const tenant = await getTenant();
 
-  // Filing the PDF is best effort — losing the attachment copy should not
+  // Archiving the document is best effort — losing the stored copy should not
   // cost us the parsed invoice.
   let pdfUrl = "";
   try {
-    const year = today().slice(0, 4);
-    const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
-    if (!rootFolderId) throw new Error("GOOGLE_DRIVE_ROOT_FOLDER_ID is not set");
-    const purchFolderId = await getOrCreateFolder("Purchase_Invoices", rootFolderId);
-    const yearFolderId = await getOrCreateFolder(year, purchFolderId);
-    const { url } = await uploadPdf(buffer, documentName, yearFolderId, tenant.email);
-    pdfUrl = url;
-  } catch (driveErr) {
+    const stored = await storeDocument({
+      accountNo: tenant.accountNo,
+      category: "purchase-invoices",
+      year: today().slice(0, 4),
+      filename: documentName,
+      buffer,
+      ownerEmail: tenant.email,
+    });
+    pdfUrl = stored.url;
+  } catch (storeErr) {
     console.warn(
-      "[ingest] Drive upload failed, continuing without PDF URL:",
-      driveErr instanceof Error ? driveErr.message : driveErr
+      "[ingest] Document archive failed, continuing without a URL:",
+      storeErr instanceof Error ? storeErr.message : storeErr
     );
   }
 

@@ -1,6 +1,9 @@
 import { getServerSession } from "next-auth";
 import { ok, error } from "@/lib/utils/api-helpers";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const session = await getServerSession();
 

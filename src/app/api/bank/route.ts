@@ -8,6 +8,9 @@ import { nextId } from "@/lib/accounting/id-generator";
 import { dimensionArray } from "@/lib/accounting/dimensions";
 import { ok, error, parseBody } from "@/lib/utils/api-helpers";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const banks = await readSheetAsObjects<BankAccount>(SHEETS.BankAccounts);

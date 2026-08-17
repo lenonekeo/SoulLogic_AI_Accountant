@@ -6,6 +6,9 @@ import { ID_PREFIXES, ValuePostingRule } from "@/types/enums";
 import { nextId } from "@/lib/accounting/id-generator";
 import { ok, error } from "@/lib/utils/api-helpers";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);

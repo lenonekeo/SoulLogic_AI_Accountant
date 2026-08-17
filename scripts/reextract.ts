@@ -16,7 +16,7 @@ import { config } from "dotenv";
 config({ path: ".env.local", quiet: true } as never);
 
 import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment } from "../src/lib/google/gmail";
-import { downloadFile, fileIdFromUrl } from "../src/lib/google/drive";
+import { fetchDocument, locatorFromStoredUrl } from "../src/lib/storage/documents";
 import { sniffContentType } from "../src/lib/utils/content-type";
 import { parseInvoiceImage, parseInvoiceDocument } from "../src/lib/ai/document-parser";
 import { categorizeExpense } from "../src/lib/ai/categorizer";
@@ -83,10 +83,10 @@ async function main() {
       sourceLabel = `email attachment ${attachments[0].filename}`;
     } else {
       const url = String(existing[col("PDF_URL")] ?? "");
-      const fileId = url ? fileIdFromUrl(url) : null;
-      if (!fileId) throw new Error(`${purchInvId} has no usable PDF_URL to re-read; pass a gmail query instead`);
-      buffer = await downloadFile(fileId);
-      sourceLabel = `Drive archive ${fileId}`;
+      const locator = locatorFromStoredUrl(url);
+      if (!locator) throw new Error(`${purchInvId} has no readable archive; pass a gmail query instead`);
+      buffer = (await fetchDocument(locator)).buffer;
+      sourceLabel = locator.kind === "blob" ? `archive ${locator.pathname}` : `Drive archive ${locator.fileId}`;
     }
 
     // Trust the bytes, not the stored extension — archived phone photos were

@@ -6,6 +6,9 @@ import { sendEmail } from "@/lib/google/gmail";
 import { ok, error } from "@/lib/utils/api-helpers";
 import { NotFoundError } from "@/lib/utils/errors";
 
+// Tenant-scoped: never prerender or cache this response.
+export const dynamic = "force-dynamic";
+
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, { params }: Ctx) {
