@@ -21,7 +21,9 @@ export function blobConfigured(): boolean {
 }
 
 function appUrl(): string {
-  return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  // Trimmed first: APP_URL was stored with a trailing newline, which produced
+  // document links with a line break inside the host and resolved nowhere.
+  return (process.env.APP_URL ?? "http://localhost:3000").trim().replace(/\/$/, "");
 }
 
 export function encodeLocator(locator: Locator): string {

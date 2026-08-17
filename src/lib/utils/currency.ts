@@ -1,5 +1,7 @@
-const DEFAULT_CURRENCY = process.env.DEFAULT_CURRENCY ?? "CAD";
-const DEFAULT_LOCALE = process.env.DEFAULT_LOCALE ?? "en";
+// Trimmed: Intl throws RangeError on a locale or currency tag carrying stray
+// whitespace, and these were stored with a trailing newline.
+const DEFAULT_CURRENCY = (process.env.DEFAULT_CURRENCY ?? "CAD").trim();
+const DEFAULT_LOCALE = (process.env.DEFAULT_LOCALE ?? "en").trim();
 
 export function formatCurrency(amount: number, currency = DEFAULT_CURRENCY, locale = DEFAULT_LOCALE): string {
   try {

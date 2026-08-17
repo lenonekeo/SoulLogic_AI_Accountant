@@ -3,6 +3,9 @@ import { execSync } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+// Values are written without a trailing newline: Vercel stores whatever it
+// receives, and a newline inside APP_URL or STRIPE_WEBHOOK_SECRET silently
+// broke document links and webhook signature verification.
 const content = readFileSync('.env.local', 'utf8');
 const lines = content.split('\n');
 
@@ -23,17 +26,17 @@ for (const line of lines) {
 
   // Write value to a temp file to avoid any shell escaping issues
   const tmpFile = join(tmpdir(), `vercel_env_${key}.txt`);
-  writeFileSync(tmpFile, val + '\n');
+  writeFileSync(tmpFile, val);
 
   try {
     execSync(`npx vercel env rm ${key} production --yes 2>nul || true`, { stdio: 'ignore' });
-    execSync(`npx vercel env add ${key} production --yes < "${tmpFile}"`, { stdio: ['pipe', 'inherit', 'ignore'], input: val + '\n' });
+    execSync(`npx vercel env add ${key} production --yes < "${tmpFile}"`, { stdio: ['pipe', 'inherit', 'ignore'], input: val });
     console.log(`✓ ${key}`);
   } catch (e) {
     // Try alternative approach
     try {
       const result = execSync(`npx vercel env add ${key} production --yes`, {
-        input: val + '\n',
+        input: val,
         stdio: ['pipe', 'pipe', 'pipe']
       });
       console.log(`✓ ${key}`);
