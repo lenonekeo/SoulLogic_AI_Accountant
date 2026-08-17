@@ -11,6 +11,7 @@ config({ path: ".env.local", quiet: true } as never);
 import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment, getEmailHeader, markAsRead } from "../src/lib/google/gmail";
 import { runWithTenant } from "../src/lib/tenant/context";
 import { ingestInvoiceAttachment } from "../src/lib/invoices/ingest";
+import { invoiceSearchQuery } from "../src/lib/google/invoice-query";
 import { normalizeSpreadsheetId } from "../src/lib/google/spreadsheet-id";
 
 function arg(name: string): string | undefined {
@@ -34,7 +35,7 @@ async function main() {
   console.log(`Limit       : ${limit}${dryRun ? "   [DRY RUN — nothing will be written]" : ""}\n`);
 
   const messages = await listUnreadEmails(
-    `is:unread has:attachment (subject:(invoice OR bill OR receipt OR facture) OR from:${monitor})`
+    invoiceSearchQuery(monitor)
   );
   console.log(`${messages.length} unread candidate(s); processing up to ${limit}.\n`);
 

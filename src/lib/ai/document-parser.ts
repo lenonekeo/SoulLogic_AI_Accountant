@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getClaudeClient, claudeModel, DEFAULT_MAX_TOKENS, askClaudeJson, responseText } from "./claude";
 import { DOCUMENT_PARSER_PROMPT } from "./prompts";
-import { extractPdfText } from "@/lib/pdf/parser";
 
 export interface ParsedInvoiceData {
   date: string | null;
@@ -22,15 +21,44 @@ export interface ParsedInvoiceData {
   taxType: string | null;
 }
 
-// ── Parse PDF buffer using AI to extract invoice data ──
-export async function parseInvoiceDocument(pdfBuffer: Buffer): Promise<ParsedInvoiceData> {
-  const rawText = await extractPdfText(pdfBuffer);
-  const truncated = rawText.slice(0, 4000);
+/** PDFs carrying an encryption dictionary cannot be read without the password. */
+export function isEncryptedPdf(buffer: Buffer): boolean {
+  // Only the trailer region matters; scanning the whole file would false-hit on
+  // embedded image data that happens to contain these bytes.
+  return buffer.subarray(-2048).includes("/Encrypt");
+}
 
-  const result = await askClaudeJson<ParsedInvoiceData>(
-    DOCUMENT_PARSER_PROMPT,
-    `Parse this invoice document:\n\n${truncated}`
-  );
+// ── Parse a PDF using AI to extract invoice data ──
+export async function parseInvoiceDocument(pdfBuffer: Buffer): Promise<ParsedInvoiceData> {
+  if (isEncryptedPdf(pdfBuffer)) {
+    throw new Error("PDF is password-protected and cannot be read");
+  }
+
+  // Send the PDF itself rather than extracted text. Scanned receipts carry no
+  // text layer — extraction returned a single space for these — so a
+  // text-based prompt was silently shown an empty document.
+  const client = getClaudeClient();
+  const response = await client.messages.create({
+    model: claudeModel(),
+    max_tokens: DEFAULT_MAX_TOKENS,
+    system: DOCUMENT_PARSER_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "document",
+            source: { type: "base64", media_type: "application/pdf", data: pdfBuffer.toString("base64") },
+          },
+          { type: "text", text: "Parse this invoice and extract all data." },
+        ],
+      },
+    ],
+  });
+
+  const text = responseText(response);
+  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);
+  const result = JSON.parse(jsonMatch ? jsonMatch[1].trim() : text.trim()) as ParsedInvoiceData;
 
   return {
     date: result.date ?? null,
@@ -69,8 +97,16 @@ export async function isInvoiceDocument(
       { type: "text", text: "Is this an invoice, bill, or receipt? Reply only YES or NO." },
     ];
   } else {
-    const text = (await import("@/lib/pdf/parser").then(m => m.extractPdfText(buffer))).slice(0, 1000);
-    content = `Is this text from an invoice, bill, or receipt? Reply only YES or NO.\n\n${text}`;
+    if (isEncryptedPdf(buffer)) {
+      throw new Error("PDF is password-protected and cannot be read");
+    }
+    content = [
+      {
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") },
+      },
+      { type: "text", text: "Is this an invoice, bill, or receipt? Reply only YES or NO." },
+    ];
   }
 
   // Low effort for a yes/no check, but still enough max_tokens to cover

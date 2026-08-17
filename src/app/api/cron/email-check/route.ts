@@ -3,6 +3,7 @@ import { ok, error } from "@/lib/utils/api-helpers";
 import { listUnreadEmails, getEmail, getPdfAttachments, getAttachment, markAsRead, getEmailHeader } from "@/lib/google/gmail";
 import { getAccountByEmail } from "@/lib/google/accounts";
 import { runWithTenant } from "@/lib/tenant/context";
+import { invoiceSearchQuery } from "@/lib/google/invoice-query";
 import { ingestInvoiceAttachment } from "@/lib/invoices/ingest";
 
 export const runtime = "nodejs";
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     // OR come from the user themselves (mobile share)
     const monitorAddress = process.env.GMAIL_MONITOR_ADDRESS ?? "";
     const messages = await listUnreadEmails(
-      `is:unread has:attachment (subject:(invoice OR bill OR receipt OR facture) OR from:${monitorAddress})`
+      invoiceSearchQuery(monitorAddress)
     );
     const processed: string[] = [];
     const skipped: string[] = [];

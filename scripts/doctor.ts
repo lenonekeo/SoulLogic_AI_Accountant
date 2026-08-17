@@ -5,6 +5,7 @@ config({ path: ".env.local" });
 
 import { listAccounts, getAccountByEmail } from "../src/lib/google/accounts";
 import { listUnreadEmails, getEmail, getPdfAttachments, getEmailHeader } from "../src/lib/google/gmail";
+import { invoiceSearchQuery } from "../src/lib/google/invoice-query";
 
 function ok(msg: string) { console.log(`  ok    ${msg}`); }
 function bad(msg: string) { console.log(`  FAIL  ${msg}`); }
@@ -39,7 +40,7 @@ async function main() {
   }
 
   console.log("\n4. Gmail access (OAuth refresh token)");
-  const query = `is:unread has:attachment (subject:(invoice OR bill OR receipt OR facture) OR from:${monitor})`;
+  const query = invoiceSearchQuery(monitor);
   try {
     const msgs = await listUnreadEmails(query);
     ok(`query matched ${msgs.length} unread message(s)`);
