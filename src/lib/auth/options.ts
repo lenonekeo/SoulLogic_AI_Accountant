@@ -3,7 +3,7 @@ import GoogleProvider from "next-auth/providers/google";
 import { google } from "googleapis";
 import { cookies } from "next/headers";
 import { Account, claimAccount, getAccountByEmail, updateAccount } from "@/lib/google/accounts";
-import { CLAIM_COOKIE } from "@/app/claim/[token]/route";
+import { CLAIM_COOKIE } from "@/lib/auth/claim";
 import { provisionTenantBook } from "@/lib/tenant/provision";
 import { today } from "@/lib/utils/date";
 

@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccountByClaimToken } from "@/lib/google/accounts";
+import { CLAIM_COOKIE } from "@/lib/auth/claim";
 
 export const runtime = "nodejs";
 // Tenant-scoped: never prerender or cache this response.
 export const dynamic = "force-dynamic";
-
-/** Name of the short-lived cookie carrying a claim through the sign-in round trip. */
-export const CLAIM_COOKIE = "soullogic_claim";
 
 /**
  * Start the claim: remember the token, then send the customer to sign in.
