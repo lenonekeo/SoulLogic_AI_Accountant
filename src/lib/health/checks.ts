@@ -97,14 +97,26 @@ export function healthHtml(report: HealthReport): string {
   return `<h3>Pipeline health</h3><table style="border-collapse:collapse">${rows}</table>`;
 }
 
+/** Which scheduled job is reporting in. */
+export type Job = "sweep" | "report";
+
 /**
  * Tell an external watchdog this run happened.
  *
  * Nothing inside this app can report that a cron failed to fire at all — no
  * code runs to say so. A dead-man's switch alerts on the absence of this ping.
+ *
+ * Each job pings its own check. Sharing one would let a healthy job keep the
+ * check green while the other silently stopped running, which is precisely the
+ * failure this exists to catch. A single HEALTHCHECK_PING_URL still works as a
+ * fallback for both.
  */
-export async function pingWatchdog(outcome: "ok" | "fail"): Promise<void> {
-  const base = process.env.HEALTHCHECK_PING_URL?.trim();
+export async function pingWatchdog(outcome: "ok" | "fail", job: Job): Promise<void> {
+  const specific =
+    job === "sweep"
+      ? process.env.HEALTHCHECK_PING_URL_SWEEP
+      : process.env.HEALTHCHECK_PING_URL_REPORT;
+  const base = (specific ?? process.env.HEALTHCHECK_PING_URL)?.trim();
   if (!base) return;
   try {
     const url = outcome === "fail" ? `${base.replace(/\/$/, "")}/fail` : base;

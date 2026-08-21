@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    await pingWatchdog(failed.length === 0 ? "ok" : "fail");
+    await pingWatchdog(failed.length === 0 ? "ok" : "fail", "sweep");
 
     return ok({
       candidates: messages.length,
@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error("Email check cron error:", err);
-    await pingWatchdog("fail");
+    await pingWatchdog("fail", "sweep");
     return error("Failed to check emails");
   }
 }

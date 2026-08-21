@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
          ${broken ? "<p><strong>Something needs attention above.</strong></p>" : "<p>Everything nominal.</p>"}`
       ).catch((err) => console.error("[daily-report] operator alert failed:", err));
     }
-    await pingWatchdog(health.ok && failed.length === 0 ? "ok" : "fail");
+    await pingWatchdog(health.ok && failed.length === 0 ? "ok" : "fail", "report");
 
     return ok({
       date,
