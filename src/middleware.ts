@@ -9,12 +9,17 @@ const PUBLIC_PATHS = ["/", "/login", "/signup"];
 // redirect to sign-in and never run.
 const SELF_AUTHENTICATED_PREFIXES = ["/api/auth", "/api/cron", "/api/webhooks"];
 
+// Claim links are opened by customers who cannot sign in yet — that is the
+// whole point of them — so this must be reachable without a session.
+const PUBLIC_PREFIXES = ["/claim/"];
+
 export default withAuth({
   callbacks: {
     authorized: ({ req, token }) => {
       const { pathname } = req.nextUrl;
       if (PUBLIC_PATHS.includes(pathname)) return true;
       if (SELF_AUTHENTICATED_PREFIXES.some((p) => pathname.startsWith(p))) return true;
+      if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return true;
       return !!token;
     },
   },

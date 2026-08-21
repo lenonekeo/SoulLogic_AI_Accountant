@@ -1,7 +1,9 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { google } from "googleapis";
-import { Account, getAccountByEmail, updateAccount } from "@/lib/google/accounts";
+import { cookies } from "next/headers";
+import { Account, claimAccount, getAccountByEmail, updateAccount } from "@/lib/google/accounts";
+import { CLAIM_COOKIE } from "@/app/claim/[token]/route";
 import { provisionTenantBook } from "@/lib/tenant/provision";
 import { today } from "@/lib/utils/date";
 
@@ -80,7 +82,25 @@ export const authOptions: NextAuthOptions = {
       // open: without it every request would fall back to a shared
       // spreadsheet and write one customer's books into another's.
       if (profile?.email && !token.accountNo) {
-        const acct = await getAccountByEmail(profile.email);
+        let acct = await getAccountByEmail(profile.email);
+
+        // No account for this address. Before refusing, see whether they
+        // arrived from a claim link: the address that paid is often not the
+        // Google account they sign in with, and that mismatch would otherwise
+        // lock out a customer who has already been charged.
+        if (!acct) {
+          const claimToken = cookies().get(CLAIM_COOKIE)?.value;
+          if (claimToken) {
+            const outcome = await claimAccount(claimToken, profile.email);
+            if (outcome.ok) {
+              acct = outcome.account;
+              console.log(`[auth] ${acct.Account_No} claimed by ${profile.email}`);
+            } else {
+              throw new Error(`Claim failed (${outcome.reason}) for ${profile.email}`);
+            }
+          }
+        }
+
         if (!acct) {
           throw new Error(`No account provisioned for ${profile.email}`);
         }

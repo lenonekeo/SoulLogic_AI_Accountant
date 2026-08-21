@@ -31,6 +31,8 @@ export const HEADERS = [
   "Alias",
   "Stripe_Session_ID",
   "Provisioned_Date",
+  "Claim_Token",
+  "Billing_Email",
 ];
 
 /** A row exists from payment onward; the book arrives later, at first sign-in. */
@@ -48,6 +50,8 @@ export interface Account {
   Alias: string;
   Stripe_Session_ID: string;
   Provisioned_Date: string;
+  Claim_Token: string;
+  Billing_Email: string;
 }
 
 function getSheetsClient() {
@@ -137,7 +141,7 @@ export async function createAccount(
   stripeCustomerId: string,
   stripeSubscriptionId: string,
   plan: string,
-  extra?: { status?: AccountStatus; alias?: string; stripeSessionId?: string }
+  extra?: { status?: AccountStatus; alias?: string; stripeSessionId?: string; claimToken?: string }
 ): Promise<void> {
   const row = [
     accountNo,
@@ -151,6 +155,8 @@ export async function createAccount(
     extra?.alias ?? "",
     extra?.stripeSessionId ?? "",
     spreadsheetId ? today() : "",
+    extra?.claimToken ?? "",
+    "",
   ];
   await getSheetsClient().spreadsheets.values.append({
     spreadsheetId: masterSpreadsheetId(),
@@ -184,4 +190,58 @@ export async function updateAccount(
     requestBody: { values: [row] },
   });
   return true;
+}
+
+/**
+ * A single-use secret that ties a paid account to whichever Google identity
+ * eventually signs in.
+ *
+ * Checkout collects a billing address; sign-in uses a Google account. When
+ * those differ the email lookup finds nothing and the customer — who has
+ * already paid — cannot get in, because sign-in is the very thing that fails.
+ * The token travels in the welcome email and binds the two on first use.
+ */
+export function generateClaimToken(): string {
+  return randomBytes(24).toString("base64url");
+}
+
+export async function getAccountByClaimToken(token: string): Promise<Account | null> {
+  if (!token) return null;
+  const row = (await readRows()).find((r) => (r[11] ?? "") === token);
+  return row ? toAccount(row) : null;
+}
+
+/** How long a claim link stays usable, from the day the account was created. */
+const CLAIM_VALIDITY_DAYS = 30;
+
+export type ClaimOutcome =
+  | { ok: true; account: Account }
+  | { ok: false; reason: "unknown-token" | "expired" | "already-claimed" };
+
+/**
+ * Bind a Google identity to the account holding this token.
+ *
+ * The token is cleared in the same write, so a claim link that leaks or gets
+ * forwarded cannot be replayed to attach a second identity.
+ */
+export async function claimAccount(token: string, loginEmail: string): Promise<ClaimOutcome> {
+  const account = await getAccountByClaimToken(token);
+  if (!account) return { ok: false, reason: "unknown-token" };
+  if (!account.Claim_Token) return { ok: false, reason: "already-claimed" };
+
+  const createdAt = Date.parse(account.Created_Date);
+  if (Number.isFinite(createdAt)) {
+    const ageDays = (Date.now() - createdAt) / 86_400_000;
+    if (ageDays > CLAIM_VALIDITY_DAYS) return { ok: false, reason: "expired" };
+  }
+
+  const login = loginEmail.trim().toLowerCase();
+  await updateAccount(account.Account_No, {
+    // Email is what sign-in resolves on, so it becomes the Google identity.
+    // The address that paid is kept, since that is who the invoice belongs to.
+    Email: login,
+    Billing_Email: account.Billing_Email || account.Email,
+    Claim_Token: "",
+  });
+  return { ok: true, account: { ...account, Email: login } };
 }

@@ -6,6 +6,7 @@ import {
   getAccountByStripeSession,
   nextAccountNo,
   generateAlias,
+  generateClaimToken,
 } from "@/lib/google/accounts";
 import { sendEmail } from "@/lib/google/gmail";
 
@@ -16,13 +17,13 @@ export const runtime = "nodejs";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-function welcomeHtml(accountNo: string, alias: string | null, appUrl: string): string {
+function welcomeHtml(accountNo: string, alias: string | null, appUrl: string, claimToken: string): string {
   const aliasBlock = alias
     ? `<p>Forward invoices to <strong>${alias}</strong> and they will be filed automatically.</p>`
     : "";
   return `<h2>Welcome — your account is ready to set up.</h2>
     <p>Account number: <strong>${accountNo}</strong></p>
-    <p><a href="${appUrl}/login">Sign in with Google</a> to finish setting up.
+    <p><a href="${appUrl}/claim/${claimToken}">Sign in with Google</a> to finish setting up.
     Your books are created in your own Google Drive the first time you sign in,
     so use the Google account you want them to live in.</p>
     ${aliasBlock}
@@ -79,14 +80,19 @@ export async function POST(req: NextRequest) {
     // own Drive files — so it is created at first sign-in instead.
     const accountNo = await nextAccountNo();
     const alias = generateAlias();
+    // The link in the welcome email carries this, so the account can be bound
+    // to whichever Google identity signs in — which is frequently not the
+    // address that paid.
+    const claimToken = generateClaimToken();
     await createAccount(accountNo, email, "", stripeCustomerId, stripeSubscriptionId, plan, {
       status: "pending",
       alias: alias ?? "",
       stripeSessionId: session.id,
+      claimToken,
     });
 
     const appUrl = process.env.APP_URL ?? "https://soullogic-ai-accountant.vercel.app";
-    await sendEmail(email, "Welcome to SoulLogic AI Accountant", welcomeHtml(accountNo, alias, appUrl));
+    await sendEmail(email, "Welcome to SoulLogic AI Accountant", welcomeHtml(accountNo, alias, appUrl, claimToken));
 
     console.log(`[stripe/webhook] ${accountNo} created pending for ${email}`);
     return new Response("ok", { status: 200 });
