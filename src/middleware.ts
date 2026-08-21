@@ -7,7 +7,14 @@ const PUBLIC_PATHS = ["/", "/login", "/signup"];
 // NextAuth itself, the Vercel crons (CRON_SECRET) and the Stripe webhook
 // (signature verification). Session-gating these makes the crons silently
 // redirect to sign-in and never run.
-const SELF_AUTHENTICATED_PREFIXES = ["/api/auth", "/api/cron", "/api/webhooks"];
+const SELF_AUTHENTICATED_PREFIXES = [
+  "/api/auth",
+  "/api/cron",
+  "/api/webhooks",
+  // Checks its own CRON_SECRET. Session-gating it would redirect the very
+  // monitor meant to notice an outage, and report a redirect as healthy.
+  "/api/health",
+];
 
 // Claim links are opened by customers who cannot sign in yet — that is the
 // whole point of them — so this must be reachable without a session.
