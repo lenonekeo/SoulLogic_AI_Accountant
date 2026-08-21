@@ -5,6 +5,7 @@ import { resolveTenantAccount } from "@/lib/google/resolve-tenant-email";
 import { runWithTenant } from "@/lib/tenant/context";
 import { invoiceSearchQuery } from "@/lib/google/invoice-query";
 import { ingestInvoiceAttachment } from "@/lib/invoices/ingest";
+import { pingWatchdog } from "@/lib/health/checks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -105,6 +106,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    await pingWatchdog(failed.length === 0 ? "ok" : "fail");
+
     return ok({
       candidates: messages.length,
       examined: examined.length,
@@ -118,6 +121,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error("Email check cron error:", err);
+    await pingWatchdog("fail");
     return error("Failed to check emails");
   }
 }

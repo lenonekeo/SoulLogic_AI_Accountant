@@ -5,6 +5,7 @@ import { listAccounts } from "@/lib/google/accounts";
 import { runWithTenant } from "@/lib/tenant/context";
 import { buildDailySummary, DailySummary } from "@/lib/reports/daily";
 import { today } from "@/lib/utils/date";
+import { runHealthChecks, healthHtml, pingWatchdog } from "@/lib/health/checks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,7 +77,29 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return ok({ date, sent: sent.length, failed: failed.length, failedAccounts: failed });
+    // Health goes to the operator, not to customers: a revoked share or an
+    // expired token is not a tenant's problem to read about.
+    const health = await runHealthChecks();
+    const operator = process.env.ALERT_EMAIL ?? process.env.GMAIL_MONITOR_ADDRESS;
+    if (operator) {
+      const broken = !health.ok || failed.length > 0;
+      await sendEmail(
+        operator,
+        `${broken ? "[ACTION NEEDED] " : ""}SoulLogic pipeline — ${date}`,
+        `${healthHtml(health)}
+         <p>Digests sent: ${sent.length}${failed.length ? `, failed for ${failed.join(", ")}` : ""}</p>
+         ${broken ? "<p><strong>Something needs attention above.</strong></p>" : "<p>Everything nominal.</p>"}`
+      ).catch((err) => console.error("[daily-report] operator alert failed:", err));
+    }
+    await pingWatchdog(health.ok && failed.length === 0 ? "ok" : "fail");
+
+    return ok({
+      date,
+      sent: sent.length,
+      failed: failed.length,
+      failedAccounts: failed,
+      health: { ok: health.ok, failing: health.failing.map((c) => c.name) },
+    });
   } catch (err) {
     console.error("Daily report cron error:", err);
     return error("Failed to send daily reports");
